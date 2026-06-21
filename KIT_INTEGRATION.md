@@ -1,6 +1,6 @@
 # Integrating into the Solana AI Kit
 
-This skill is built to slot into [solana-ai-kit](https://github.com/solanabr/solana-ai-kit) the same way the other `ext/` skills are wired: a git submodule, a `skill-registry.json` entry, and routing rows in the hub `SKILL.md`. Below is the exact set of edits and the fork-and-PR flow.
+This skill slots into [solana-ai-kit](https://github.com/solanabr/solana-ai-kit) the same way the core Solana `ext/` skills (solana-dev, solana-game, metaplex) are wired: a git submodule under `.claude/skills/ext/`, plus one routing line in the hub `.claude/skills/SKILL.md`. A `skill-registry.json` catalog entry is optional (some skills have one, the core Solana ext skills do not). The kit already ships a hub `token-2022.md`; this skill is the deeper, tested, tooling-backed companion to it (extension compatibility matrix, transfer-hook security audit, corrected confidential-transfer status, and the mint inspector). Below are the exact edits and the fork-and-PR flow.
 
 ## 1. Submodule
 
@@ -9,9 +9,9 @@ git submodule add https://github.com/Andy00L/solana-token-extensions-skill \
   .claude/skills/ext/solana-token-extensions
 ```
 
-## 2. Registry entry
+## 2. Registry entry (optional)
 
-Add this object to the `entries` array in `.claude/skills/skill-registry.json`:
+The core Solana ext skills (solana-dev, solana-game, metaplex, jupiter) are not in `skill-registry.json`; some skills (for example meteora-sdk-skill) are. An entry adds catalog discoverability. If you include one, append this object to the `entries` array in `.claude/skills/skill-registry.json` (schema confirmed against the existing submodule entries):
 
 ```json
 {
@@ -39,33 +39,15 @@ Add this object to the `entries` array in `.claude/skills/skill-registry.json`:
 }
 ```
 
-## 3. Hub routing
+## 3. Hub routing (required)
 
-Add this block to `.claude/skills/SKILL.md`:
+The hub `.claude/skills/SKILL.md` already has a `## Token Extensions` section with a single `token-2022.md` line. Add this skill as a second bullet directly under that line (do not create a new section):
 
 ```markdown
-## Token-2022 (Token Extensions)
-
-From [solana-token-extensions-skill](ext/solana-token-extensions/skill/):
-
-- [ext/solana-token-extensions/skill/SKILL.md](ext/solana-token-extensions/skill/SKILL.md) - Token-2022 entry point
-- [overview.md](ext/solana-token-extensions/skill/overview.md) - Token-2022 vs SPL Token
-- [compatibility-matrix.md](ext/solana-token-extensions/skill/compatibility-matrix.md) - Which extensions combine, and the init order
-- [transfer-hook-security.md](ext/solana-token-extensions/skill/transfer-hook-security.md) - Transfer-hook audit checklist
-- [confidential-transfer.md](ext/solana-token-extensions/skill/confidential-transfer.md) - Confidential transfer status
-- [mint-inspector.md](ext/solana-token-extensions/skill/mint-inspector.md) - Decode a live mint and assess its integration risk (CLI and MCP tool)
-- [migration.md](ext/solana-token-extensions/skill/migration.md) - SPL Token to Token-2022
+- [ext/solana-token-extensions/skill/SKILL.md](ext/solana-token-extensions/skill/SKILL.md) - Token-2022 mastery (tested): extension compatibility matrix, transfer-hook security audit, accurate confidential-transfer status (disabled on mainnet, issue #657), SPL-to-Token-2022 migration, wallet/DEX/CEX integration, and a read-only mint inspector (CLI + MCP `inspect_mint`). The deeper, tested companion to `token-2022.md`.
 ```
 
-And add these rows to the hub's task-routing table:
-
-```
-| Token-2022 extension selection | ext/solana-token-extensions -> overview.md |
-| Which extensions can combine | ext/solana-token-extensions -> compatibility-matrix.md |
-| Audit a transfer hook | ext/solana-token-extensions -> transfer-hook-security.md |
-| Inspect a mint address | ext/solana-token-extensions -> mint-inspector.md |
-| Migrate SPL Token to Token-2022 | ext/solana-token-extensions -> migration.md |
-```
+The skill's own `SKILL.md` router then progressively discloses the focused docs (`overview.md`, `compatibility-matrix.md`, `transfer-hook-security.md`, `confidential-transfer.md`, `mint-inspector.md`, `migration.md`, and the rest), so one hub line is enough.
 
 ## 4. MCP tool (inspect_mint)
 
@@ -87,9 +69,10 @@ git clone https://github.com/<your-handle>/solana-ai-kit
 cd solana-ai-kit
 git checkout -b add-solana-token-extensions
 
-# Apply steps 1 to 3 above, then:
-git add .gitmodules .claude/skills/ext/solana-token-extensions \
-        .claude/skills/skill-registry.json .claude/skills/SKILL.md
+# Apply step 1 (submodule) and step 3 (hub routing). Step 2 (registry) is optional.
+git add .gitmodules .claude/skills/ext/solana-token-extensions .claude/skills/SKILL.md
+# only if you added the optional registry entry:
+git add .claude/skills/skill-registry.json
 git commit -m "Add solana-token-extensions (Token-2022) ext skill"
 git push -u origin add-solana-token-extensions
 

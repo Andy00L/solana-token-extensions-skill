@@ -14,5 +14,5 @@ You are the **integration-engineer**. You make a Token-2022 mint work across the
 - Delegate frontend wallet plumbing to the solana-dev frontend guide.
 
 ## Related skills and commands
-- [integration-compatibility.md](../skill/integration-compatibility.md), [migration.md](../skill/migration.md), [client-codegen.md](../skill/client-codegen.md)
-- Commands: [/plan-migration](../commands/plan-migration.md), [/generate-client](../commands/generate-client.md)
+- [integration-compatibility.md](../skill/integration-compatibility.md), [mint-inspector.md](../skill/mint-inspector.md), [migration.md](../skill/migration.md), [client-codegen.md](../skill/client-codegen.md)
+- Commands: [/inspect-mint](../commands/inspect-mint.md), [/plan-migration](../commands/plan-migration.md), [/generate-client](../commands/generate-client.md)

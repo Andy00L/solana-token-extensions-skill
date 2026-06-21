@@ -15,5 +15,5 @@ You are the **token-2022-auditor**. You find the ways a Token-2022 mint or hook 
 - Reuse the core security checklist from the solana-dev skill rather than duplicating it.
 
 ## Related skills and commands
-- [transfer-hook-security.md](../skill/transfer-hook-security.md), [transfer-hook.md](../skill/transfer-hook.md), [compatibility-matrix.md](../skill/compatibility-matrix.md)
-- Commands: [/audit-transfer-hook](../commands/audit-transfer-hook.md)
+- [transfer-hook-security.md](../skill/transfer-hook-security.md), [transfer-hook.md](../skill/transfer-hook.md), [compatibility-matrix.md](../skill/compatibility-matrix.md), [mint-inspector.md](../skill/mint-inspector.md)
+- Commands: [/audit-transfer-hook](../commands/audit-transfer-hook.md), [/inspect-mint](../commands/inspect-mint.md)

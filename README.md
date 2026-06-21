@@ -22,7 +22,7 @@ flowchart TD
     R -->|security| S["transfer-hook-security<br/>confidential-transfer"]
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
-    R --> CMD[["5 commands<br/>scaffold-mint, check-compat,<br/>audit-hook, plan-migration,<br/>gen-client"]]
+    R --> CMD[["6 commands<br/>scaffold-mint, check-compat,<br/>inspect-mint, audit-hook,<br/>plan-migration, gen-client"]]
     B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 32 tests green"]
     S -.proven by.-> EX
     O -.tool.-> EX
@@ -57,7 +57,7 @@ Program development (Anchor, Pinocchio), IDL and client codegen, base testing ha
 
 ## Install
 
-The installer copies `skill/*` into `~/.claude/skills/solana-token-extensions/`. By default it also registers the four agents into `~/.claude/agents/` and the five commands into `~/.claude/commands/`, so they work standalone as live subagents and slash commands. It does **not** modify your global `~/.claude/CLAUDE.md`, and it never overwrites an existing agent or command (a same-named file is skipped with a notice).
+The installer copies `skill/*` into `~/.claude/skills/solana-token-extensions/`. By default it also registers the four agents into `~/.claude/agents/` and the six commands into `~/.claude/commands/`, so they work standalone as live subagents and slash commands. It does **not** modify your global `~/.claude/CLAUDE.md`, and it never overwrites an existing agent or command (a same-named file is skipped with a notice).
 
 ```bash
 # Standard: skill plus agents and commands
@@ -161,7 +161,7 @@ git submodule add https://github.com/Andy00L/solana-token-extensions-skill \
   .claude/skills/ext/solana-token-extensions
 ```
 
-Then add a routing block for it in the kit's `.claude/skills/SKILL.md` hub, and a catalog entry in `.claude/skills/skill-registry.json`. See [KIT_INTEGRATION.md](KIT_INTEGRATION.md) for the exact registry entry, hub routing rows, and the fork-and-PR steps.
+Then add one routing line for it in the kit's hub `.claude/skills/SKILL.md` (and, optionally, a catalog entry in `.claude/skills/skill-registry.json`). See [KIT_INTEGRATION.md](KIT_INTEGRATION.md) for the exact hub line, the optional registry entry, and the fork-and-PR steps.
 
 ## Contributing
 
