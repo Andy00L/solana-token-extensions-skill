@@ -124,7 +124,7 @@ A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 
 ```
 solana-token-extensions-skill/
-├── skill/                     SKILL.md router + 15 focused docs
+├── skill/                     SKILL.md router + 15 focused docs (+ solana-dev-skill submodule)
 ├── agents/                    4 specialized agents
 ├── commands/                  5 workflow commands
 ├── rules/                     rust.md, typescript.md (code style law)
@@ -137,6 +137,8 @@ solana-token-extensions-skill/
 ├── install.sh / install-custom.sh
 └── LICENSE                    MIT
 ```
+
+This repo vendors `solana-dev-skill` as a git submodule under `skill/solana-dev-skill` (the delegated core docs), matching the reference layout. Clone with `git clone --recurse-submodules`, or run `git submodule update --init` after a plain clone.
 
 ## Add to the Solana AI Kit (optional)
 
