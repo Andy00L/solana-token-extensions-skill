@@ -1,0 +1,19 @@
+# Node and TypeScript
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Rust
+target/
+
+# Solana
+test-ledger/
+*.so
+**/*-keypair.json
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.log

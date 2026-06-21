@@ -1,0 +1,23 @@
+{
+  "name": "ts-multi-extension-mint",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Token-2022 mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, with offline LiteSVM tests.",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.13",
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "^1.98.0",
+    "litesvm": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

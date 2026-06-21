@@ -1,0 +1,20 @@
+[package]
+name = "transfer-hook-allowlist"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A fail-closed Token-2022 transfer hook that enforces a per-recipient allowlist."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "3"
+spl-transfer-hook-interface = "2.1.0"
+spl-tlv-account-resolution = "0.11.1"
+spl-token-2022 = { version = "11.0.0", default-features = false, features = ["no-entrypoint"] }
+spl-pod = "0.7.3"
+solana-system-interface = { version = "3.2.0", features = ["bincode"] }
+
+[profile.release]
+overflow-checks = true
