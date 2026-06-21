@@ -52,17 +52,20 @@ Program development (Anchor, Pinocchio), IDL and client codegen, base testing ha
 
 ## Install
 
-The installer copies `skill/*` into `~/.claude/skills/solana-token-extensions/`. It does **not** modify your global `~/.claude/CLAUDE.md`.
+The installer copies `skill/*` into `~/.claude/skills/solana-token-extensions/`. By default it also registers the four agents into `~/.claude/agents/` and the five commands into `~/.claude/commands/`, so they work standalone as live subagents and slash commands. It does **not** modify your global `~/.claude/CLAUDE.md`, and it never overwrites an existing agent or command (a same-named file is skipped with a notice).
 
 ```bash
-# Standard, non-interactive
+# Standard: skill plus agents and commands
 ./install.sh -y
 
-# Interactive: choose the skills directory and whether to add the core skill
+# Skill only, no agents or commands
+./install.sh -y --skill-only
+
+# Interactive: choose the skills directory and what to register
 ./install-custom.sh
 ```
 
-If `solana-dev-skill` is not already installed, the installer offers to clone it (this skill delegates core program work to it).
+Repo-relative links inside the copied agents and commands are rewritten to the installed absolute paths, so they resolve outside the repo. If `solana-dev-skill` is not already installed, the installer offers to clone it (this skill delegates core program work to it).
 
 ## Default stack (January 2026)
 

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Interactive installer for the Solana Token-2022 (Token Extensions) skill.
-# Lets you choose the skills directory and whether to install the core skill.
+# Lets you choose the skills directory, whether to register agents and commands,
+# and whether to install the core skill. Existing files are never overwritten.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,7 +21,10 @@ echo -e "${BOLD}Solana Token-2022 skill: custom install${NC}"
 read -r -p "Skills directory [$DEFAULT_SKILLS_DIR]: " skills_dir
 skills_dir="${skills_dir:-$DEFAULT_SKILLS_DIR}"
 target_dir="$skills_dir/$SKILL_NAME"
+agents_dir="$HOME/.claude/agents"
+commands_dir="$HOME/.claude/commands"
 
+read -r -p "Register agents and commands globally (skips existing)? [Y/n] " want_extras
 read -r -p "Also install the core solana-dev skill if missing? [Y/n] " want_core
 
 if [ ! -d "$SOURCE_DIR" ]; then
@@ -44,6 +48,34 @@ for item in "$SOURCE_DIR"/*; do
   fi
 done
 echo -e "${GREEN}Installed to $target_dir${NC}"
+
+if [[ ! "$want_extras" =~ ^[Nn]$ ]]; then
+  mkdir -p "$agents_dir" "$commands_dir"
+  if [ -d "$SCRIPT_DIR/agents" ]; then
+    for agent_file in "$SCRIPT_DIR"/agents/*.md; do
+      name="$(basename "$agent_file")"
+      if [ -e "$agents_dir/$name" ]; then
+        echo -e "  ${YELLOW}skip existing agent: $name${NC}"
+        continue
+      fi
+      sed -e "s#\.\./skill/#$target_dir/#g" -e "s#\.\./commands/#$commands_dir/#g" \
+        "$agent_file" > "$agents_dir/$name"
+      echo "  agent:   $name"
+    done
+  fi
+  if [ -d "$SCRIPT_DIR/commands" ]; then
+    for command_file in "$SCRIPT_DIR"/commands/*.md; do
+      name="$(basename "$command_file")"
+      if [ -e "$commands_dir/$name" ]; then
+        echo -e "  ${YELLOW}skip existing command: $name${NC}"
+        continue
+      fi
+      sed -e "s#\.\./skill/#$target_dir/#g" -e "s#\.\./agents/#$agents_dir/#g" \
+        "$command_file" > "$commands_dir/$name"
+      echo "  command: /${name%.md}"
+    done
+  fi
+fi
 
 if [[ ! "$want_core" =~ ^[Nn]$ ]]; then
   core_dir="$skills_dir/solana-dev"
