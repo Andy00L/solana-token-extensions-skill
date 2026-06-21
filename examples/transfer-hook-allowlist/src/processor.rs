@@ -239,4 +239,63 @@ mod tests {
         let data = TransferHookInstruction::Execute { amount: 1 }.pack();
         assert!(process(&program, &accounts, &data).is_err());
     }
+
+    #[test]
+    fn execute_rejects_too_few_accounts() {
+        // Execute needs six accounts; provide two so account reads fail closed.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let first_key = Pubkey::new_from_array([30u8; 32]);
+        let second_key = Pubkey::new_from_array([31u8; 32]);
+        let mut first_lamports = 0u64;
+        let mut second_lamports = 0u64;
+        let mut first_data: Vec<u8> = Vec::new();
+        let mut second_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&first_key, false, false, &mut first_lamports, &mut first_data, &owner, false),
+            AccountInfo::new(&second_key, false, false, &mut second_lamports, &mut second_data, &owner, false),
+        ];
+        let data = TransferHookInstruction::Execute { amount: 1 }.pack();
+        assert!(process(&program, &accounts, &data).is_err());
+    }
+
+    #[test]
+    fn initialize_requires_authority_signer() {
+        // The mint authority must sign InitializeExtraAccountMetaList.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let extra_key = Pubkey::new_from_array([40u8; 32]);
+        let mint_key = Pubkey::new_from_array([41u8; 32]);
+        let authority_key = Pubkey::new_from_array([42u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut extra_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut authority_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut extra_data: Vec<u8> = Vec::new();
+        let mut mint_data: Vec<u8> = Vec::new();
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&extra_key, false, true, &mut extra_lamports, &mut extra_data, &owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &owner, false),
+            // authority is NOT a signer
+            AccountInfo::new(&authority_key, false, false, &mut authority_lamports, &mut authority_data, &owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &owner, false),
+        ];
+        let metas = vec![ExtraAccountMeta::new_with_seeds(
+            &[Seed::Literal { bytes: b"x".to_vec() }],
+            false,
+            false,
+        )
+        .unwrap()];
+        let data = TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas: metas,
+        }
+        .pack();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(ProgramError::MissingRequiredSignature)
+        );
+    }
 }
