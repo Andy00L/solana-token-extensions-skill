@@ -2,7 +2,8 @@
 
 .PHONY: verify ts hook clean
 
-verify: ts hook
+# Build the hook first so the TypeScript e2e test can load the compiled program.
+verify: hook ts
 
 ts:
 	cd ts-multi-extension-mint && npm ci && npm test

@@ -22,6 +22,6 @@ A hook program implements two instructions from `spl-transfer-hook-interface`:
 Write the hook against the transfer-hook interface, and access mints through anchor-spl `token_interface`, so the same code path serves SPL Token and Token-2022 mints. Delegate Anchor or native program scaffolding to the solana-dev skill.
 
 ## Reference
-`examples/transfer-hook-allowlist` is a native Rust hook with a fail-closed allowlist and an integration test. The security checklist it follows is in [transfer-hook-security.md](transfer-hook-security.md).
+`examples/transfer-hook-allowlist` is a native Rust hook with a fail-closed allowlist, a mint-authority-gated `AddToAllowlist` instruction, and the transferring-flag gate. An end-to-end test proves a real transfer is blocked when the destination is not allowlisted and allowed after `AddToAllowlist`. The security checklist it follows is in [transfer-hook-security.md](transfer-hook-security.md).
 
 Sources: Transfer Hook guide (https://solana.com/developers/guides/token-extensions/transfer-hook), Transfer Hook interface (https://spl.solana.com/transfer-hook-interface).

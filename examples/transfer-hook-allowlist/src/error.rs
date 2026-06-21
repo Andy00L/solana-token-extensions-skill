@@ -9,11 +9,14 @@ pub enum AllowlistError {
     DestinationNotAllowed,
     /// The provided allow account is not the expected per-destination PDA.
     UnexpectedAllowAccount,
+    /// The signer is not the mint authority, so it may not manage the allowlist.
+    UnauthorizedAllowlistManager,
 }
 
 // Custom program error codes. Distinct values, source: this program.
 const DESTINATION_NOT_ALLOWED_CODE: u32 = 1;
 const UNEXPECTED_ALLOW_ACCOUNT_CODE: u32 = 2;
+const UNAUTHORIZED_ALLOWLIST_MANAGER_CODE: u32 = 3;
 
 impl From<AllowlistError> for ProgramError {
     fn from(error: AllowlistError) -> Self {
@@ -23,6 +26,9 @@ impl From<AllowlistError> for ProgramError {
             }
             AllowlistError::UnexpectedAllowAccount => {
                 ProgramError::Custom(UNEXPECTED_ALLOW_ACCOUNT_CODE)
+            }
+            AllowlistError::UnauthorizedAllowlistManager => {
+                ProgramError::Custom(UNAUTHORIZED_ALLOWLIST_MANAGER_CODE)
             }
         }
     }

@@ -16,7 +16,7 @@ use spl_token_2022::{
     extension::{
         transfer_hook::TransferHookAccount, BaseStateWithExtensions, PodStateWithExtensions,
     },
-    pod::PodAccount,
+    pod::{PodAccount, PodMint},
 };
 use spl_transfer_hook_interface::{
     collect_extra_account_metas_signer_seeds, error::TransferHookError,
@@ -24,13 +24,16 @@ use spl_transfer_hook_interface::{
     instruction::{ExecuteInstruction, TransferHookInstruction},
 };
 
-use crate::{error::AllowlistError, ALLOW_SEED_PREFIX};
+use crate::{error::AllowlistError, ADD_TO_ALLOWLIST_DISCRIMINATOR, ALLOW_SEED_PREFIX};
 
 // Account index of the destination token account in the Execute instruction.
 // Source: spl-transfer-hook-interface Execute account ordering.
 const DESTINATION_ACCOUNT_INDEX: u8 = 2;
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
+    if input.starts_with(&ADD_TO_ALLOWLIST_DISCRIMINATOR) {
+        return process_add_to_allowlist(program_id, accounts);
+    }
     let instruction = TransferHookInstruction::unpack(input)?;
     match instruction {
         TransferHookInstruction::Execute { amount } => {
@@ -104,6 +107,64 @@ fn process_initialize(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramR
 
     let mut data = extra_metas_info.try_borrow_mut_data()?;
     ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, &extra_metas)?;
+    Ok(())
+}
+
+/// Add a destination token account to the allowlist by creating its allow PDA.
+/// Only the mint authority may call this; the created PDA's presence is what the
+/// Execute handler later checks. Source: ../../skill/transfer-hook-security.md.
+fn process_add_to_allowlist(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    let authority_info = next_account_info(account_info_iter)?;
+    let mint_info = next_account_info(account_info_iter)?;
+    let allow_info = next_account_info(account_info_iter)?;
+    let destination_info = next_account_info(account_info_iter)?;
+    let system_program_info = next_account_info(account_info_iter)?;
+
+    if !authority_info.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Only the mint authority may manage the allowlist. Compare by bytes so the
+    // mint's Address type and the account's Pubkey type line up.
+    {
+        let mint_data = mint_info.try_borrow_data()?;
+        let mint = PodStateWithExtensions::<PodMint>::unpack(&mint_data)?;
+        let mint_authority = mint
+            .base
+            .mint_authority
+            .ok_or(AllowlistError::UnauthorizedAllowlistManager)?;
+        if mint_authority.to_bytes() != authority_info.key.to_bytes() {
+            return Err(AllowlistError::UnauthorizedAllowlistManager.into());
+        }
+    }
+
+    let (expected_allow, bump) = Pubkey::find_program_address(
+        &[ALLOW_SEED_PREFIX, destination_info.key.as_ref()],
+        program_id,
+    );
+    if expected_allow != *allow_info.key {
+        return Err(AllowlistError::UnexpectedAllowAccount.into());
+    }
+    if !allow_info.data_is_empty() {
+        return Ok(()); // already allowlisted; adding again is a no-op
+    }
+
+    let bump_seed = [bump];
+    let signer_seeds = [ALLOW_SEED_PREFIX, destination_info.key.as_ref(), &bump_seed];
+    let space: usize = 1; // a single marker byte; its presence means allowed
+    let space_u64 = u64::try_from(space).map_err(|_| ProgramError::InvalidAccountData)?;
+    let rent = Rent::get()?;
+    let lamports = rent.minimum_balance(space);
+    invoke_signed(
+        &create_account(authority_info.key, allow_info.key, lamports, space_u64, program_id),
+        &[
+            authority_info.clone(),
+            allow_info.clone(),
+            system_program_info.clone(),
+        ],
+        &[&signer_seeds],
+    )?;
     Ok(())
 }
 
@@ -293,6 +354,41 @@ mod tests {
             extra_account_metas: metas,
         }
         .pack();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(ProgramError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_requires_signer() {
+        // AddToAllowlist must be signed by the mint authority.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let authority_key = Pubkey::new_from_array([60u8; 32]);
+        let mint_key = Pubkey::new_from_array([61u8; 32]);
+        let allow_key = Pubkey::new_from_array([62u8; 32]);
+        let destination_key = Pubkey::new_from_array([63u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut authority_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut mint_data: Vec<u8> = Vec::new();
+        let mut allow_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            // authority is NOT a signer
+            AccountInfo::new(&authority_key, false, true, &mut authority_lamports, &mut authority_data, &owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &owner, false),
+            AccountInfo::new(&allow_key, false, true, &mut allow_lamports, &mut allow_data, &owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
         assert_eq!(
             process(&program, &accounts, &data),
             Err(ProgramError::MissingRequiredSignature)

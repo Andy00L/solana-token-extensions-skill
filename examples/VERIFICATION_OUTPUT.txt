@@ -1,7 +1,30 @@
+cd transfer-hook-allowlist && cargo build-sbf && cargo test
+    Finished `release` profile [optimized] target(s) in 0.39s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/transfer_hook_allowlist-a08ef19c1bfb7917)
+
+running 8 tests
+test processor::tests::add_to_allowlist_requires_signer ... ok
+test processor::tests::execute_rejects_too_few_accounts ... ok
+test error::tests::errors_map_to_distinct_codes ... ok
+test processor::tests::initialize_requires_authority_signer ... ok
+test processor::tests::process_rejects_empty_input ... ok
+test processor::tests::execute_denies_when_not_transferring ... ok
+test processor::tests::validation_list_builds_and_initializes ... ok
+test processor::tests::allow_pda_is_deterministic_and_destination_specific ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests transfer_hook_allowlist
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
 cd ts-multi-extension-mint && npm ci && npm test
 npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
 
-added 121 packages, and audited 122 packages in 8s
+added 121 packages, and audited 122 packages in 7s
 
 22 packages are looking for funding
   run `npm fund` for details
@@ -14,40 +37,63 @@ To address all issues (including breaking changes), run:
 Run `npm audit` for details.
 
 > ts-multi-extension-mint@1.0.0 test
-> vitest run
+> node run-tests.mjs
 
 
  RUN  v2.1.9 /home/drew/brasupateam/solana-token-extensions-skill/examples/ts-multi-extension-mint
 
-(node:892535) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+ ✓ tests/multi-extension-mint.test.ts (2 tests) 292ms
+ ✓ tests/edge-cases.test.ts (4 tests) 86ms
+ ✓ tests/initialization-order.test.ts (1 test) 168ms
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+ Test Files  3 passed (4)
+      Tests  7 passed (8)
+     Errors  1 error
+   Start at  10:17:21
+   Duration  5.68s (transform 133ms, setup 0ms, collect 1.89s, tests 547ms, environment 1ms, prepare 417ms)
+
+(node:978672) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-(node:892536) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+terminate called after throwing an instance of 'std::bad_alloc'
+  what():  std::bad_alloc
+(node:978698) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
- ✓ tests/initialization-order.test.ts (1 test) 174ms
- ✓ tests/multi-extension-mint.test.ts (2 tests) 310ms
+(node:978718) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:978739) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
 
- Test Files  2 passed (2)
-      Tests  3 passed (3)
-   Start at  08:26:58
-   Duration  1.38s (transform 163ms, setup 0ms, collect 990ms, tests 484ms, environment 1ms, prepare 305ms)
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: Worker exited unexpectedly
+ ❯ ChildProcess.onUnexpectedExit node_modules/tinypool/dist/index.js:118:30
+ ❯ ChildProcess.emit node:events:531:35
+ ❯ ChildProcess._handle.onexit node:internal/child_process:293:12
 
-cd transfer-hook-allowlist && cargo build-sbf && cargo test
-    Finished `release` profile [optimized] target(s) in 0.38s
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
-     Running unittests src/lib.rs (target/debug/deps/transfer_hook_allowlist-a08ef19c1bfb7917)
 
-running 5 tests
-test processor::tests::process_rejects_empty_input ... ok
-test processor::tests::allow_pda_is_deterministic_and_destination_specific ... ok
-test processor::tests::validation_list_builds_and_initializes ... ok
-test error::tests::errors_map_to_distinct_codes ... ok
-test processor::tests::execute_denies_when_not_transferring ... ok
+[run-tests] LiteSVM native crash, retrying (2/4)
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ RUN  v2.1.9 /home/drew/brasupateam/solana-token-extensions-skill/examples/ts-multi-extension-mint
 
-   Doc-tests transfer_hook_allowlist
+ ✓ tests/transfer-hook-e2e.test.ts (1 test) 241ms
+ ✓ tests/multi-extension-mint.test.ts (2 tests) 288ms
+ ✓ tests/edge-cases.test.ts (4 tests) 84ms
+ ✓ tests/initialization-order.test.ts (1 test) 170ms
 
-running 0 tests
+ Test Files  4 passed (4)
+      Tests  8 passed (8)
+   Start at  10:17:28
+   Duration  3.97s (transform 132ms, setup 0ms, collect 1.86s, tests 783ms, environment 1ms, prepare 422ms)
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
+(node:978808) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:978832) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:978866) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:978957) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

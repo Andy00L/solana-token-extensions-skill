@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
-![Tests](https://img.shields.io/badge/tests-8%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-16%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![Stack](https://img.shields.io/badge/stack-January%202026-blue)
 
@@ -80,13 +80,14 @@ Both examples run offline with no validator and no devnet.
 
 ```bash
 cd examples
-make verify     # npm ci && npm test, then cargo build-sbf && cargo test
+make verify     # cargo build-sbf, then npm ci && npm test, then cargo test
 ```
 
 What passes:
 
-- `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. A second test asserts that an out-of-order initialization is rejected. **3 tests, LiteSVM, offline.**
-- `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, and per-destination PDA validation. **`cargo build-sbf` produces a deployable program, and `cargo test` runs 5 unit tests** covering fail-closed Execute, distinct error codes, deterministic PDA derivation, and the validation list.
+- `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. Further tests assert that an out-of-order initialization is rejected and that the fee is capped and floored correctly. **8 tests, LiteSVM, offline.**
+- `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, per-destination PDA validation, and an `AddToAllowlist` instruction gated on the mint authority. `cargo build-sbf` produces a deployable program and `cargo test` runs **8 unit tests**.
+- End to end: the `transfer-hook-e2e` test loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`.
 
 A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 
@@ -152,7 +153,7 @@ git submodule add https://github.com/Andy00L/solana-token-extensions-skill \
   .claude/skills/ext/solana-token-extensions
 ```
 
-Then add a routing block for it in the kit's `.claude/skills/SKILL.md` hub, and a catalog entry in `.claude/skills/skill-registry.json`.
+Then add a routing block for it in the kit's `.claude/skills/SKILL.md` hub, and a catalog entry in `.claude/skills/skill-registry.json`. See [KIT_INTEGRATION.md](KIT_INTEGRATION.md) for the exact registry entry, hub routing rows, and the fork-and-PR steps.
 
 ## Contributing
 

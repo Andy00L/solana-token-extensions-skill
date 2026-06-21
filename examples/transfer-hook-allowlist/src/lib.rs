@@ -24,6 +24,11 @@ pub use error::AllowlistError;
 /// Seed prefix for a per-destination allow account. Source: this program.
 pub const ALLOW_SEED_PREFIX: &[u8] = b"allow";
 
+/// Program-specific instruction tag for AddToAllowlist. Chosen so it does not
+/// collide with the transfer-hook interface discriminators (which are sha256
+/// derived). The off-chain client prepends these eight bytes to the data.
+pub const ADD_TO_ALLOWLIST_DISCRIMINATOR: [u8; 8] = [240, 1, 2, 3, 4, 5, 6, 7];
+
 entrypoint!(process_instruction);
 
 fn process_instruction(
