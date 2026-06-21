@@ -1,3 +1,4 @@
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair } from "@solana/web3.js";
 import { LiteSVM } from "litesvm";
 import { describe, expect, it } from "vitest";
@@ -103,5 +104,26 @@ describe("inspectAccount over real on-chain mint data", () => {
       return;
     }
     expect(result.reason.kind).toBe("account-not-found");
+  });
+
+  it("rejects a token-program account that is not a valid mint", () => {
+    const svm = new LiteSVM();
+    const notAMint = Keypair.generate().publicKey;
+    // A Token-2022 owned account whose data is too small to be a mint, like a
+    // token account or a hook validation account pointed at by mistake.
+    svm.setAccount(notAMint, {
+      executable: false,
+      owner: TOKEN_2022_PROGRAM_ID,
+      lamports: 1_000_000,
+      data: new Uint8Array(10),
+      rentEpoch: 0,
+    });
+
+    const result = inspectAccount(notAMint, readAccountInfo(svm, notAMint));
+    expect(result.status).toBe("error");
+    if (result.status !== "error") {
+      return;
+    }
+    expect(result.reason.kind).toBe("not-a-mint");
   });
 });

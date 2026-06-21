@@ -96,4 +96,4 @@ git push -u origin add-solana-token-extensions
 # Open a PR from your fork to solanabr/solana-ai-kit.
 ```
 
-Map the PR description to the four judging axes: Usefulness (full Token-2022 surface, plus a mint inspector for due diligence without writing code), Novelty (compatibility matrix, transfer-hook security audit, confidential-transfer status, and an executable risk engine behind the inspector), Quality (tested TypeScript and Rust reference code, 31 offline tests), and Fit (submodule plus registry plus hub routing, an MCP inspect_mint tool, delegates to solana-dev).
+Map the PR description to the four judging axes: Usefulness (full Token-2022 surface, plus a mint inspector for due diligence without writing code), Novelty (compatibility matrix, transfer-hook security audit, confidential-transfer status, and an executable risk engine behind the inspector), Quality (tested TypeScript and Rust reference code, 32 offline tests), and Fit (submodule plus registry plus hub routing, an MCP inspect_mint tool, delegates to solana-dev).

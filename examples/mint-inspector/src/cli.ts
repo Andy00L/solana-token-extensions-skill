@@ -10,8 +10,9 @@
  * prefix and a non-zero exit code. The inspector is read only: it reads public
  * account data and never signs, sends, or logs any secret.
  */
+import type { DecodeError } from "./decode-mint";
 import { describeError } from "./describe-error";
-import { fetchMintAccount, formatFetchError } from "./fetch-account";
+import { type FetchError, fetchMintAccount, formatFetchError } from "./fetch-account";
 import { formatDecodeError, formatReport, inspectAccount } from "./inspect";
 
 // Solana public mainnet RPC. Source: https://solana.com/docs/core/clusters
@@ -70,6 +71,16 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { status: "ok", address, rpcUrl, json };
 }
 
+// Emit an inspection error. In --json mode every error is a structured object on
+// stdout so the output stays machine-readable; otherwise a prefixed line on stderr.
+function emitError(asJson: boolean, message: string, reason: FetchError | DecodeError): void {
+  if (asJson) {
+    process.stdout.write(`${JSON.stringify({ status: "error", reason }, null, 2)}\n`);
+  } else {
+    process.stderr.write(`[InspectMintCli] ${message}\n`);
+  }
+}
+
 async function runCli(argv: string[]): Promise<number> {
   const parsed = parseArgs(argv);
 
@@ -84,17 +95,13 @@ async function runCli(argv: string[]): Promise<number> {
 
   const fetched = await fetchMintAccount(parsed.address, parsed.rpcUrl);
   if (fetched.status === "error") {
-    process.stderr.write(`[InspectMintCli] ${formatFetchError(fetched.reason)}\n`);
+    emitError(parsed.json, formatFetchError(fetched.reason), fetched.reason);
     return 1;
   }
 
   const result = inspectAccount(fetched.address, fetched.account);
   if (result.status === "error") {
-    if (parsed.json) {
-      process.stdout.write(`${JSON.stringify({ status: "error", reason: result.reason }, null, 2)}\n`);
-    } else {
-      process.stderr.write(`[InspectMintCli] ${formatDecodeError(result.reason)}\n`);
-    }
+    emitError(parsed.json, formatDecodeError(result.reason), result.reason);
     return 1;
   }
 
