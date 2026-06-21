@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
-![Tests](https://img.shields.io/badge/tests-16%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![Stack](https://img.shields.io/badge/stack-January%202026-blue)
 
@@ -18,23 +18,24 @@ flowchart TD
     U([User request]) --> R{SKILL.md router}
     R -->|choose and combine| C["overview<br/>compatibility-matrix"]
     R -->|build extensions| B["transfer-fee<br/>transfer-hook<br/>metadata-and-groups<br/>value-extensions<br/>supply-controls<br/>account-extensions"]
-    R -->|operate and integrate| O["migration<br/>integration-compatibility<br/>client-codegen<br/>testing"]
+    R -->|operate and integrate| O["migration<br/>integration-compatibility<br/>mint-inspector<br/>client-codegen<br/>testing"]
     R -->|security| S["transfer-hook-security<br/>confidential-transfer"]
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
     R --> CMD[["5 commands<br/>scaffold-mint, check-compat,<br/>audit-hook, plan-migration,<br/>gen-client"]]
-    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook<br/>make verify: 8 tests green"]
+    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 31 tests green"]
     S -.proven by.-> EX
+    O -.tool.-> EX
 ```
 
 The agent reads `SKILL.md` first, then loads only the focused file a task needs. Tokens are spent on the topic at hand, not the whole skill.
 
 ## Why this skill
 
-- **Useful**: covers the full Token-2022 extension surface that builders hit every day, with the init-order and account-sizing gotchas that cause silent failures.
-- **Novel**: three documents nobody else ships as a skill: a real **extension compatibility matrix**, a **transfer-hook security audit checklist**, and an accurate **confidential-transfer status** (disabled on mainnet since June 2025, tracking issue [token-2022#657](https://github.com/solana-program/token-2022/issues/657), still open). A lower-effort skill would show confidential-transfer code as live; this one does not.
-- **Tested**: two reference builds run offline and deterministic. A TypeScript multi-extension mint on LiteSVM (3 tests) and a native Rust transfer-hook program (`cargo build-sbf` plus 5 unit tests). One inaccuracy was found and corrected by actually running the code (see the compatibility matrix note on Non-Transferable plus Transfer Hook).
-- **Fits**: mirrors the reference `solana-game-skill` shape exactly (skill router, focused docs, agents, commands, rules, installer), so it can be submoduled into the kit.
+- **Useful**: covers the full Token-2022 extension surface that builders hit every day, with the init-order and account-sizing gotchas that cause silent failures. It also ships a read-only **mint inspector** (CLI and MCP) that decodes any mint and flags wallet, DEX, and CEX risks, for due diligence without writing code.
+- **Novel**: three documents nobody else ships as a skill: a real **extension compatibility matrix**, a **transfer-hook security audit checklist**, and an accurate **confidential-transfer status** (disabled on mainnet since June 2025, tracking issue [token-2022#657](https://github.com/solana-program/token-2022/issues/657), still open). A lower-effort skill would show confidential-transfer code as live; this one does not. The matrix and the integration rules are not just prose: the mint inspector turns them into an executable risk engine.
+- **Tested**: three reference builds run offline and deterministic. A TypeScript multi-extension mint on LiteSVM (8 tests), a native Rust transfer-hook program (`cargo build-sbf` plus 8 unit tests), and the mint inspector (15 tests). One inaccuracy was found and corrected by actually running the code (see the compatibility matrix note on Non-Transferable plus Transfer Hook).
+- **Fits**: mirrors the reference `solana-game-skill` shape exactly (skill router, focused docs, agents, commands, rules, installer), so it can be submoduled into the kit. The inspector also exposes an MCP `inspect_mint` tool an agent can call directly.
 
 ## What's included
 
@@ -42,9 +43,13 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 
 Decide and combine: `overview.md`, `compatibility-matrix.md`.
 Extension families: `transfer-fee.md`, `transfer-hook.md`, `metadata-and-groups.md`, `value-extensions.md`, `supply-controls.md`, `account-extensions.md`.
-Operate and integrate: `migration.md`, `integration-compatibility.md`, `client-codegen.md`, `testing.md`.
+Operate and integrate: `migration.md`, `integration-compatibility.md`, `mint-inspector.md`, `client-codegen.md`, `testing.md`.
 Security: `transfer-hook-security.md`, `confidential-transfer.md`.
 Reference: `resources.md`.
+
+### Tools
+
+`mint-inspector.md` documents a read-only inspector that decodes a live mint's extensions and reports its wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP `inspect_mint` tool in `examples/mint-inspector`, with offline tests.
 
 ### Core (delegated to solana-dev-skill)
 
@@ -76,11 +81,11 @@ Repo-relative links inside the copied agents and commands are rewritten to the i
 
 ## Tested reference code
 
-Both examples run offline with no validator and no devnet.
+All three examples run offline with no validator and no devnet.
 
 ```bash
 cd examples
-make verify     # cargo build-sbf, then npm ci && npm test, then cargo test
+make verify     # builds the Rust hook, then runs the TS, inspector, and Rust suites
 ```
 
 What passes:
@@ -88,6 +93,7 @@ What passes:
 - `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. Further tests assert that an out-of-order initialization is rejected and that the fee is capped and floored correctly. **8 tests, LiteSVM, offline.**
 - `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, per-destination PDA validation, and an `AddToAllowlist` instruction gated on the mint authority. `cargo build-sbf` produces a deployable program and `cargo test` runs **8 unit tests**.
 - End to end: the `transfer-hook-e2e` test loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`.
+- `examples/mint-inspector`: the read-only mint inspector (CLI and MCP). The risk engine is tested as pure functions, the decoder against real Token-2022 mints built in LiteSVM, and the MCP handler with an injected fetcher. **15 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
 
 A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 
@@ -120,6 +126,7 @@ A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 |---|---|
 | `/scaffold-mint` | Scaffold a Token-2022 mint with a chosen extension set, sized and ordered |
 | `/check-extension-compatibility` | Validate an extension set against the compatibility matrix |
+| `/inspect-mint` | Decode a live mint by address and report wallet, DEX, and CEX integration risks |
 | `/audit-transfer-hook` | Security review of a transfer-hook program and its ExtraAccountMetaList |
 | `/plan-migration` | Plan an SPL Token to Token-2022 migration |
 | `/generate-client` | Generate TypeScript and Rust client code for a mint's extensions |
@@ -128,13 +135,14 @@ A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 
 ```
 solana-token-extensions-skill/
-├── skill/                     SKILL.md router + 15 focused docs (+ solana-dev-skill submodule)
+├── skill/                     SKILL.md router + 16 focused docs (+ solana-dev-skill submodule)
 ├── agents/                    4 specialized agents
-├── commands/                  5 workflow commands
+├── commands/                  6 workflow commands
 ├── rules/                     rust.md, typescript.md (code style law)
 ├── examples/
 │   ├── ts-multi-extension-mint/    TypeScript mint + LiteSVM tests
 │   ├── transfer-hook-allowlist/    native Rust hook + unit tests
+│   ├── mint-inspector/             read-only mint inspector (CLI + MCP) + offline tests
 │   ├── Makefile                    make verify
 │   └── VERIFICATION_OUTPUT.txt     committed run transcript
 ├── CLAUDE.md                  skill agent configuration

@@ -1,0 +1,32 @@
+{
+  "name": "mint-inspector",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Token-2022 mint inspector: decode a mint's extensions and report wallet, DEX, and CEX integration risks. CLI and MCP tool, with offline LiteSVM tests.",
+  "license": "MIT",
+  "bin": {
+    "inspect-mint": "src/cli.ts"
+  },
+  "scripts": {
+    "inspect": "tsx src/cli.ts",
+    "mcp": "tsx src/mcp-server.ts",
+    "test": "tsc --noEmit && node run-tests.mjs",
+    "test:once": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "^1.98.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "litesvm": "^0.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

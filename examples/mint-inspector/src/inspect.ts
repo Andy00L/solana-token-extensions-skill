@@ -1,0 +1,104 @@
+/**
+ * Orchestrate decode plus assess into one inspection, and render it as text.
+ * Pure: takes an already-fetched account, so it runs offline and deterministic.
+ */
+import type { AccountInfo, PublicKey } from "@solana/web3.js";
+import { type Assessment, assessExtensions } from "./assess-risk";
+import { type DecodeError, type DecodedMint, decodeMint } from "./decode-mint";
+
+export type Inspection = {
+  mint: DecodedMint;
+  assessment: Assessment;
+};
+
+export type InspectionResult =
+  | { status: "ok"; inspection: Inspection }
+  | { status: "error"; reason: DecodeError };
+
+/** Decode an account and assess its extensions in one step. */
+export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buffer> | null): InspectionResult {
+  const decoded = decodeMint(address, accountInfo);
+  if (decoded.status === "error") {
+    return { status: "error", reason: decoded.reason };
+  }
+  const assessment = assessExtensions(decoded.mint.extensions.map((extension) => extension.id));
+  return { status: "ok", inspection: { mint: decoded.mint, assessment } };
+}
+
+/** A human-readable decode error message. */
+export function formatDecodeError(reason: DecodeError): string {
+  switch (reason.kind) {
+    case "account-not-found":
+      return "account not found on this RPC; check the address and the cluster";
+    case "wrong-owner":
+      return `account is not owned by a Token program (owner: ${reason.owner}); it is not a token mint`;
+    case "not-a-mint":
+      return `account is not a valid token mint: ${reason.detail}`;
+  }
+}
+
+/** Render an inspection as an aligned plain-text report. */
+export function formatReport(inspection: Inspection): string {
+  const { mint, assessment } = inspection;
+  const lines: string[] = [];
+
+  lines.push("Token-2022 mint inspection");
+  lines.push(`  Address:          ${mint.address}`);
+  lines.push(`  Program:          ${mint.programKind} (${mint.programId})`);
+  lines.push(`  Decimals:         ${mint.decimals}`);
+  lines.push(`  Supply (raw):     ${mint.supply}`);
+  lines.push(`  Mint authority:   ${mint.mintAuthority ?? "none (fixed supply)"}`);
+  lines.push(`  Freeze authority: ${mint.freezeAuthority ?? "none"}`);
+
+  if (mint.programKind === "spl-token") {
+    lines.push("");
+    lines.push("Classic SPL Token mint: no Token-2022 extensions.");
+    return lines.join("\n");
+  }
+
+  lines.push("");
+  lines.push(`Extensions (${mint.extensions.length}):`);
+  if (mint.extensions.length === 0) {
+    lines.push("  none");
+  }
+  for (const extension of mint.extensions) {
+    lines.push(`  - ${extension.label} [${extension.id}]`);
+    for (const [key, value] of Object.entries(extension.detail)) {
+      lines.push(`      ${key}: ${value}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(`Integration findings (${assessment.findings.length}), overall severity: ${assessment.posture.overallSeverity}`);
+  if (assessment.findings.length === 0) {
+    lines.push("  none");
+  }
+  for (const finding of assessment.findings) {
+    const surfaces = finding.surfaces.length === 0 ? "informational" : finding.surfaces.join(", ");
+    lines.push(`  [${finding.severity.toUpperCase()}] ${finding.title} (${surfaces})`);
+    lines.push(`      ${finding.detail}`);
+    lines.push(`      source: ${finding.sourceRef}`);
+  }
+
+  if (assessment.conflicts.length > 0) {
+    lines.push("");
+    lines.push(`Conflicts (${assessment.conflicts.length}):`);
+    for (const conflict of assessment.conflicts) {
+      lines.push(`  [${conflict.severity.toUpperCase()}] ${conflict.title}`);
+      lines.push(`      ${conflict.detail}`);
+      lines.push(`      source: ${conflict.sourceRef}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("Posture:");
+  lines.push(`  CEX listing blockers:  ${formatList(assessment.posture.cexBlockers)}`);
+  lines.push(`  DEX routing frictions: ${formatList(assessment.posture.dexFrictions)}`);
+  lines.push(`  Wallet caveats:        ${formatList(assessment.posture.walletCaveats)}`);
+
+  return lines.join("\n");
+}
+
+function formatList(values: string[]): string {
+  return values.length === 0 ? "none" : values.join(", ");
+}

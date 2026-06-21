@@ -19,7 +19,7 @@ Add this object to the `entries` array in `.claude/skills/skill-registry.json`:
   "name": "Solana Token-2022 (Token Extensions)",
   "type": "skill",
   "domain": "solana-tokens",
-  "description": "Token-2022 mastery: extension compatibility matrix, transfer-hook security audit, confidential-transfer status, fees, metadata, migration, and tested TypeScript and Rust reference code. Delegates core program development to solana-dev.",
+  "description": "Token-2022 mastery: extension compatibility matrix, transfer-hook security audit, confidential-transfer status, fees, metadata, migration, tested TypeScript and Rust reference code, and a read-only mint inspector (CLI plus MCP inspect_mint tool) that decodes a mint's extensions and reports wallet, DEX, and CEX integration risk. Delegates core program development to solana-dev.",
   "source": "https://github.com/Andy00L/solana-token-extensions-skill",
   "install": {
     "method": "submodule",
@@ -35,7 +35,7 @@ Add this object to the `entries` array in `.claude/skills/skill-registry.json`:
   },
   "default_installed": false,
   "safety": "clean",
-  "tags": ["solana", "token-2022", "token-extensions", "transfer-hook", "confidential-transfer", "metadata", "spl"]
+  "tags": ["solana", "token-2022", "token-extensions", "transfer-hook", "confidential-transfer", "metadata", "spl", "mint-inspector", "mcp"]
 }
 ```
 
@@ -53,6 +53,7 @@ From [solana-token-extensions-skill](ext/solana-token-extensions/skill/):
 - [compatibility-matrix.md](ext/solana-token-extensions/skill/compatibility-matrix.md) - Which extensions combine, and the init order
 - [transfer-hook-security.md](ext/solana-token-extensions/skill/transfer-hook-security.md) - Transfer-hook audit checklist
 - [confidential-transfer.md](ext/solana-token-extensions/skill/confidential-transfer.md) - Confidential transfer status
+- [mint-inspector.md](ext/solana-token-extensions/skill/mint-inspector.md) - Decode a live mint and assess its integration risk (CLI and MCP tool)
 - [migration.md](ext/solana-token-extensions/skill/migration.md) - SPL Token to Token-2022
 ```
 
@@ -62,10 +63,23 @@ And add these rows to the hub's task-routing table:
 | Token-2022 extension selection | ext/solana-token-extensions -> overview.md |
 | Which extensions can combine | ext/solana-token-extensions -> compatibility-matrix.md |
 | Audit a transfer hook | ext/solana-token-extensions -> transfer-hook-security.md |
+| Inspect a mint address | ext/solana-token-extensions -> mint-inspector.md |
 | Migrate SPL Token to Token-2022 | ext/solana-token-extensions -> migration.md |
 ```
 
-## 4. Fork and open the PR
+## 4. MCP tool (inspect_mint)
+
+The skill also ships an MCP server that exposes one read-only tool, `inspect_mint`, under `examples/mint-inspector`. An agent in the kit can call it to decode a mint and assess its integration risk without writing code.
+
+```bash
+cd .claude/skills/ext/solana-token-extensions/examples/mint-inspector
+npm install
+npm run mcp        # serves inspect_mint over stdio
+```
+
+Register it in the kit's MCP client configuration by pointing the client at that command. The tool takes `{ mintAddress: string, rpcUrl?: string }` and returns a text report plus the JSON inspection. It is read only: it fetches one account and never signs or sends.
+
+## 5. Fork and open the PR
 
 ```bash
 # Fork solanabr/solana-ai-kit on GitHub first, then:
@@ -82,4 +96,4 @@ git push -u origin add-solana-token-extensions
 # Open a PR from your fork to solanabr/solana-ai-kit.
 ```
 
-Map the PR description to the four judging axes: Usefulness (full Token-2022 surface), Novelty (compatibility matrix, transfer-hook security audit, confidential-transfer status), Quality (tested TypeScript and Rust reference code, all offline), and Fit (submodule plus registry plus hub routing, delegates to solana-dev).
+Map the PR description to the four judging axes: Usefulness (full Token-2022 surface, plus a mint inspector for due diligence without writing code), Novelty (compatibility matrix, transfer-hook security audit, confidential-transfer status, and an executable risk engine behind the inspector), Quality (tested TypeScript and Rust reference code, 31 offline tests), and Fit (submodule plus registry plus hub routing, an MCP inspect_mint tool, delegates to solana-dev).

@@ -25,6 +25,7 @@ Use this skill to choose, build, integrate, and audit Token-2022 mints. It owns 
 
 ### Integrate and operate
 - Wallet, DEX, explorer, and exchange compatibility for a given extension set
+- Inspect a live mint by address: decode its extensions and flag integration risks ([mint-inspector.md](mint-inspector.md))
 - Migrate an existing SPL Token mint to Token-2022
 - Generate client code (TypeScript with @solana/kit and @solana/spl-token, Rust with anchor-spl)
 
@@ -58,6 +59,7 @@ Use this skill to choose, build, integrate, and audit Token-2022 mints. It owns 
 | Combine extensions | Conflicts, ordering | [compatibility-matrix.md](compatibility-matrix.md) |
 | Migration | SPL to Token-2022 | [migration.md](migration.md) |
 | Integration | Wallet, DEX, CEX support | [integration-compatibility.md](integration-compatibility.md) |
+| Inspect a live mint | Decode a mint, flag risks | [mint-inspector.md](mint-inspector.md) |
 | Client code | TypeScript and Rust builders | [client-codegen.md](client-codegen.md) |
 | Hook security | Audit a hook | [transfer-hook-security.md](transfer-hook-security.md) |
 | Program or Anchor | On-chain logic | [programs-anchor.md](../solana-dev/programs-anchor.md) |
@@ -107,6 +109,7 @@ Extension families:
 Operate and integrate:
 - [migration.md](migration.md): SPL Token to Token-2022
 - [integration-compatibility.md](integration-compatibility.md): wallet, DEX, explorer, CEX support
+- [mint-inspector.md](mint-inspector.md): decode a live mint and assess its integration risk (CLI and MCP tool)
 - [client-codegen.md](client-codegen.md): TypeScript and Rust client patterns
 - [testing.md](testing.md): extension behavior tests with LiteSVM and Mollusk
 
@@ -153,6 +156,9 @@ Reference:
 | Which extensions can combine | compatibility-matrix.md |
 | Migrate SPL mint to Token-2022 | migration.md |
 | Wallet, DEX, or exchange support | integration-compatibility.md |
+| Inspect a mint address | mint-inspector.md |
+| What extensions does this mint have | mint-inspector.md |
+| Is this token safe to integrate or list | mint-inspector.md |
 | Generate client code | client-codegen.md |
 | Test extension behavior | testing.md |
 | Audit a transfer hook | transfer-hook-security.md |
@@ -169,6 +175,7 @@ Reference:
 |---------|-------------|
 | /scaffold-mint | Scaffold a Token-2022 mint with a chosen extension set, sized account, ordered init |
 | /check-extension-compatibility | Validate an extension set against the compatibility matrix |
+| /inspect-mint | Decode a live mint by address and report wallet, DEX, and CEX integration risks |
 | /audit-transfer-hook | Security review of a transfer-hook program and its ExtraAccountMetaList |
 | /plan-migration | Plan a migration from an SPL Token mint to Token-2022 |
 | /generate-client | Generate TypeScript and Rust client code for a mint's extensions |
@@ -187,5 +194,6 @@ Reference:
 This skill ships tested reference code under `examples/` in the source repository:
 - `examples/ts-multi-extension-mint`: a Token-2022 mint that combines transfer fee, metadata pointer, token metadata, and interest-bearing, with LiteSVM tests that run offline.
 - `examples/transfer-hook-allowlist`: a native Rust transfer-hook program with a fail-closed allowlist and a LiteSVM integration test.
+- `examples/mint-inspector`: the read-only mint inspector behind [mint-inspector.md](mint-inspector.md), a CLI and MCP tool with offline tests. See that file for usage.
 
-Run `make verify` in `examples/` to build and test both.
+Run `make verify` in `examples/` to build and test all three.
