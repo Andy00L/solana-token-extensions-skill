@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
-![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-51%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![Stack](https://img.shields.io/badge/stack-January%202026-blue)
 
@@ -23,7 +23,7 @@ flowchart TD
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
     R --> CMD[["6 commands<br/>scaffold-mint, check-compat,<br/>inspect-mint, audit-hook,<br/>plan-migration, gen-client"]]
-    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 50 checks green"]
+    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 51 checks green"]
     S -.proven by.-> EX
     O -.tool.-> EX
 ```
@@ -34,7 +34,7 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 
 - **Useful**: covers the full Token-2022 extension surface that builders hit every day, with the init-order and account-sizing gotchas that cause silent failures, plus a use-case decision tree from requirement to extension set. It ships a read-only **mint inspector** (CLI and MCP) that decodes any mint and flags wallet, DEX, and CEX risks, and a second MCP tool, `check_extension_compatibility`, that vets a planned extension set before any code exists.
 - **Novel**: material nobody else ships as a skill: an **extension compatibility matrix** (including the runtime-enforced Scaled UI Amount versus Interest-Bearing exclusion and the required-companion rules), a **transfer-hook security audit checklist**, and an accurate **confidential-transfer status** (disabled on mainnet since June 2025, re-enabled on testnet and devnet only, tracking issue [token-2022#657](https://github.com/solana-program/token-2022/issues/657), still open). The matrix and integration rules are executable: the inspector turns them into a risk engine, and it names extension codes the published `@solana/spl-token` enum does not yet map (such as the confidential transfer fee on PYUSD), so a real mint decodes completely instead of showing "unrecognized".
-- **Tested**: three reference builds run offline and deterministic, 50 checks total. A TypeScript multi-extension mint on LiteSVM (7 tests plus a transfer-hook end-to-end scenario), a native Rust transfer-hook program (`cargo build-sbf` plus 8 unit tests), and the mint inspector (34 tests, including offline decodes of five captured mainnet mints: PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT). Two inaccuracies were caught and corrected by running the code against PYUSD: a confidential-transfer-with-hook pair wrongly flagged as incompatible (PYUSD carries both), and an extension code the inspector now names instead of dropping.
+- **Tested**: three reference builds run offline and deterministic, 51 checks total. A TypeScript multi-extension mint on LiteSVM (7 tests plus a transfer-hook end-to-end scenario), a native Rust transfer-hook program (`cargo build-sbf` plus 8 unit tests), and the mint inspector (35 tests, including offline decodes of five captured mainnet mints: PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT). Two inaccuracies were caught and corrected by running the code against PYUSD: a confidential-transfer-with-hook pair wrongly flagged as incompatible (PYUSD carries both), and an extension code the inspector now names instead of dropping.
 - **Fits**: mirrors the reference skill shape (skill router, focused docs, agents, commands, rules, installer), so it can be submoduled into the kit. The inspector exposes two MCP tools, `inspect_mint` and `check_extension_compatibility`, that an agent can call directly.
 
 ## What's included
@@ -88,12 +88,12 @@ cd examples
 make verify     # builds the Rust hook, then runs the TS, inspector, and Rust suites
 ```
 
-What passes (50 checks):
+What passes (51 checks):
 
 - `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. Further tests assert that an out-of-order initialization is rejected and that the fee is capped and floored correctly. **7 tests, LiteSVM, offline.**
 - `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, per-destination PDA validation, and an `AddToAllowlist` instruction gated on the mint authority. `cargo build-sbf` produces a deployable program and `cargo test` runs **8 unit tests**.
 - End to end: `integration/transfer-hook-e2e.ts` loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`. It runs under tsx (`npm run e2e`): LiteSVM's native addon is stable in a plain process but aborts intermittently inside a vitest worker, so this BPF-executing scenario runs outside vitest.
-- `examples/mint-inspector`: the read-only mint inspector (CLI and two MCP tools). The risk engine is tested as pure functions, the decoder against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and the MCP handler with an injected fetcher. **34 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
+- `examples/mint-inspector`: the read-only mint inspector (CLI and two MCP tools). The risk engine is tested as pure functions, the decoder against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and the MCP handler with an injected fetcher. **35 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
 
 A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { formatReport, inspectAccount } from "../src/inspect";
 import {
   createClassicMint,
+  createControlsMint,
   createNonTransferableHookMint,
   createRichMint,
   fundedPayer,
@@ -49,6 +50,34 @@ describe("inspectAccount over real on-chain mint data", () => {
 
     expect(assessment.posture.overallSeverity).toBe("high");
     expect(assessment.posture.cexBlockers).toContain("transfer-hook");
+  });
+
+  it("decodes a controls mint: scaled UI amount, pausable, permanent delegate, mint close", () => {
+    const svm = new LiteSVM();
+    const payer = fundedPayer(svm);
+    const { mint, delegate } = createControlsMint(svm, payer);
+
+    const result = inspectAccount(mint, readAccountInfo(svm, mint));
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") {
+      return;
+    }
+
+    const extensionIds = result.inspection.mint.extensions.map((extension) => extension.id);
+    expect(extensionIds).toContain("scaled-ui-amount");
+    expect(extensionIds).toContain("pausable");
+    expect(extensionIds).toContain("permanent-delegate");
+    expect(extensionIds).toContain("mint-close-authority");
+
+    const scaledUiAmount = result.inspection.mint.extensions.find((extension) => extension.id === "scaled-ui-amount");
+    expect(scaledUiAmount?.detail.multiplier).toBe("2");
+    const pausable = result.inspection.mint.extensions.find((extension) => extension.id === "pausable");
+    expect(pausable?.detail.paused).toBe("false");
+    const permanentDelegate = result.inspection.mint.extensions.find((extension) => extension.id === "permanent-delegate");
+    expect(permanentDelegate?.detail.delegate).toBe(delegate.toBase58());
+
+    // Permanent delegate is the listing blocker in this set.
+    expect(result.inspection.assessment.posture.cexBlockers).toContain("permanent-delegate");
   });
 
   it("proves the Non-Transferable plus Transfer Hook conflict on a real mint", () => {

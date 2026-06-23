@@ -25,7 +25,11 @@ import {
   createInitializeInterestBearingMintInstruction,
   createInitializeMetadataPointerInstruction,
   createInitializeMint2Instruction,
+  createInitializeMintCloseAuthorityInstruction,
   createInitializeNonTransferableMintInstruction,
+  createInitializePausableConfigInstruction,
+  createInitializePermanentDelegateInstruction,
+  createInitializeScaledUiAmountConfigInstruction,
   createInitializeTransferFeeConfigInstruction,
   createInitializeTransferHookInstruction,
   getMintLen,
@@ -37,6 +41,7 @@ const DEMO_DECIMALS = 9; // base-10 decimals for fixtures
 const DEMO_FEE_BASIS_POINTS = 50; // 0.50%
 const DEMO_MAX_FEE = 5_000_000_000n; // 5 tokens at 9 decimals, unit: base units
 const DEMO_INTEREST_BASIS_POINTS = 500; // 5.00% per year for display
+const DEMO_SCALED_UI_MULTIPLIER = 2; // display multiplier for the controls fixture
 
 /** Fund a fresh in-memory payer. Never logged; generated per test. */
 export function fundedPayer(svm: LiteSVM): Keypair {
@@ -166,6 +171,44 @@ export function createNonTransferableHookMint(svm: LiteSVM, payer: Keypair): Pub
   ]);
 
   return mint;
+}
+
+/**
+ * A Token-2022 mint carrying Scaled UI Amount, Pausable, Permanent Delegate, and
+ * Mint Close Authority. No well-known mainnet mint combines these four, so this
+ * builder exercises their decode paths offline against the real serialization.
+ */
+export function createControlsMint(svm: LiteSVM, payer: Keypair): { mint: PublicKey; delegate: PublicKey } {
+  const mintKeypair = Keypair.generate();
+  const mint = mintKeypair.publicKey;
+  const authority = payer.publicKey;
+  const delegate = Keypair.generate().publicKey;
+
+  const fixedExtensions = [
+    ExtensionType.ScaledUiAmountConfig,
+    ExtensionType.PausableConfig,
+    ExtensionType.PermanentDelegate,
+    ExtensionType.MintCloseAuthority,
+  ];
+  const mintLength = getMintLen(fixedExtensions);
+  const rentLamports = svm.minimumBalanceForRentExemption(BigInt(mintLength));
+
+  sendMintTransaction(svm, payer, mintKeypair, [
+    SystemProgram.createAccount({
+      fromPubkey: authority,
+      newAccountPubkey: mint,
+      space: mintLength,
+      lamports: Number(rentLamports),
+      programId: TOKEN_2022_PROGRAM_ID,
+    }),
+    createInitializeScaledUiAmountConfigInstruction(mint, authority, DEMO_SCALED_UI_MULTIPLIER, TOKEN_2022_PROGRAM_ID),
+    createInitializePausableConfigInstruction(mint, authority, TOKEN_2022_PROGRAM_ID),
+    createInitializePermanentDelegateInstruction(mint, delegate, TOKEN_2022_PROGRAM_ID),
+    createInitializeMintCloseAuthorityInstruction(mint, authority, TOKEN_2022_PROGRAM_ID),
+    createInitializeMint2Instruction(mint, DEMO_DECIMALS, authority, authority, TOKEN_2022_PROGRAM_ID),
+  ]);
+
+  return { mint, delegate };
 }
 
 /** A classic SPL Token mint (owned by the original Token program, no extensions). */

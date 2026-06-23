@@ -2,6 +2,8 @@
 
 A read-only tool that decodes a Solana mint's Token-2022 extensions from on-chain data and reports the wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
 
+See [DEMO.md](DEMO.md) for real captured output against PYUSD, USDC, and a planned extension set.
+
 ## Install
 
 ```bash
@@ -69,7 +71,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**34 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes; the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**35 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes; the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
 
 ## Dependency advisories
 
