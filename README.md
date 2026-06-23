@@ -11,6 +11,10 @@ A progressively loaded Claude Code and Codex skill that makes a coding agent an 
 
 Token-2022 is the 2026 standard for serious tokens (stablecoins, real-world assets, regulated tokens), and its extension surface is where builders trip: init ordering, account sizing, incompatible pairs, and transfer-hook security. No existing kit skill consolidates this. This one does, and ships tested reference code to prove it.
 
+The mint inspector decoding the PayPal USD (PYUSD) mint, including the confidential transfer fee that the published `@solana/spl-token` enum does not name:
+
+![The mint inspector decoding the PYUSD mint](examples/mint-inspector/demo.gif)
+
 ## How the skill routes (progressive loading)
 
 ```mermaid

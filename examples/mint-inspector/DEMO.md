@@ -1,5 +1,7 @@
 # Mint inspector demo (captured 2026-06-22)
 
+![The mint inspector decoding PYUSD](demo.gif)
+
 Real output from the shipped CLI and the `check_extension_compatibility` core, run against Solana mainnet-beta. Supply and authorities are live values that drift over time; everything else is deterministic. Reproduce with `npm install` then the commands below.
 
 ## 1. A live Token-2022 mint: PayPal USD (PYUSD)

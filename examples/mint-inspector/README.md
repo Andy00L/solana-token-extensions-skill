@@ -2,7 +2,9 @@
 
 A read-only tool that decodes a Solana mint's Token-2022 extensions from on-chain data and reports the wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
 
-See [DEMO.md](DEMO.md) for real captured output against PYUSD, USDC, and a planned extension set.
+![Inspecting the PayPal USD (PYUSD) mint](demo.gif)
+
+See [DEMO.md](DEMO.md) for this output as text, plus USDC and a planned extension set.
 
 ## Install
 
