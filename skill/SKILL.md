@@ -45,7 +45,7 @@ Use this skill to choose, build, integrate, and audit Token-2022 mints. It owns 
 1. Program: SPL Token-2022, program id `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`. Prefer the anchor-spl `token_interface` so code works for both SPL Token and Token-2022 mints.
 2. Client: `@solana/kit` for transactions and codecs, `@solana/spl-token` for extension instruction builders. Unpack mint extensions with the typed helpers, never raw bytes.
 3. Testing: LiteSVM and Mollusk for extension behavior (fees withheld, hook invoked, paused transfer rejected). See core [testing.md](../solana-dev/testing.md) for harness setup. `solana-bankrun` is deprecated; do not use it.
-4. Privacy: confidential transfers are disabled on mainnet as of June 2026 (see [confidential-transfer.md](confidential-transfer.md)). Do not ship confidential-transfer code as production ready.
+4. Privacy: confidential transfers have been disabled on mainnet since June 2025 and remain disabled as of June 2026 (live on testnet and devnet only, issue #657; see [confidential-transfer.md](confidential-transfer.md)). Do not ship confidential-transfer code as production ready.
 5. Defaults: pick the smallest extension set that meets the requirement. Errors as values in client code, no type suppression.
 
 ## Operating Procedure

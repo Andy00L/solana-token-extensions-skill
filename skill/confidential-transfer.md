@@ -4,10 +4,10 @@ Confidential transfers let a Token-2022 mint hide transfer amounts using ElGamal
 
 ## Current status: disabled on mainnet
 
-As of June 2026, confidential transfers and the ZK ElGamal Proof Program are disabled on Solana mainnet.
+Confidential transfers and the ZK ElGamal Proof Program have been disabled on Solana mainnet since June 2025, and remain disabled as of June 2026.
 
-- In June 2025 a soundness bug was found in the proof verification (a forgeable proof path). The ZK ElGamal Proof Program was disabled, and the feature was gated off at a mainnet epoch boundary.
-- Re-enablement is tracked in solana-program/token-2022 issue #657, which is open and was last updated in May 2026. It states the features remain unavailable pending completion of additional security audits.
+- A soundness bug in proof verification (a missing element in the Fiat-Shamir transcript that allowed a forgeable proof) was mitigated by a Token-2022 program update deployed on 2025-06-11, and the ZK ElGamal Proof Program was disabled on mainnet-beta on 2025-06-19 at the start of epoch 805. No exploit is known to have occurred.
+- Re-enablement is tracked in solana-program/token-2022 issue #657, still open as of mid-2026. After Code4rena, Least Authority, ZkSecurity, and Trail of Bits audits, the updated program was rolled out to testnet and devnet (per the issue's May 2026 update), but it is still not re-enabled on mainnet and no mainnet date is set.
 
 Do not present confidential-transfer code as production ready in 2026. If a user asks for it:
 1. State plainly that the feature is disabled on mainnet and link the tracking issue.

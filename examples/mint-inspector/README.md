@@ -29,37 +29,47 @@ Token-2022 mint inspection
   Decimals:         6
   ...
 Extensions (8):
+  - Mint Close Authority [mint-close-authority]
   - Permanent Delegate [permanent-delegate]
+  - Transfer Fee [transfer-fee]
+      basisPoints: 0
   - Confidential Transfer [confidential-transfer]
-  - Unrecognized extension (code 16) [unrecognized]
+  - Confidential Transfer Fee [confidential-transfer-fee]
   - Transfer Hook [transfer-hook]
       programId: none
+  - Metadata Pointer [metadata-pointer]
   - Token Metadata [token-metadata]
       name: PayPal USD
+      symbol: PYUSD
   ...
+Conflicts (1):
+  [LOW] Confidential Transfer with Transfer Hook: the hook sees no real amount on confidential transfers
 Posture:
   CEX listing blockers:  permanent-delegate, confidential-transfer, transfer-hook
 ```
 
-(Output trimmed. The unrecognized code 16 is the confidential transfer fee sub-extension, which the pinned `@solana/spl-token` enum does not name; the inspector reports it rather than dropping it.)
+(Output trimmed. The inspector names all eight extensions, including the confidential transfer fee that PYUSD carries, code 16, which the published `@solana/spl-token` enum does not yet map. The confidential-transfer-with-hook line is a low caveat, not an incompatibility: PYUSD runs both on mainnet, and the hook simply receives no real amount on a confidential transfer.)
 
 ## MCP server
 
-The same logic is exposed as an MCP tool named `inspect_mint`, so an agent can inspect a mint without writing code.
+The same core is exposed over MCP as two read-only tools, so an agent can work without writing code.
 
 ```bash
-npm run mcp        # serves inspect_mint over stdio
+npm run mcp        # serves the tools over stdio
 ```
 
-The tool takes `{ mintAddress: string, rpcUrl?: string }` and returns the text report plus the JSON inspection. Register it by pointing an MCP client at that command.
+- `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }` and returns the text report plus the JSON inspection for a live mint.
+- `check_extension_compatibility` takes `{ extensions: string[] }` (extension ids such as `transfer-hook`, `permanent-delegate`, `scaled-ui-amount`) and returns the conflicts and integration posture of a planned set, before any mint exists.
+
+Register them by pointing an MCP client at that command.
 
 ## Tests
 
 ```bash
-npm test           # tsc --noEmit, then the suite (retries only on a LiteSVM native crash)
+npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-The suite is offline and deterministic. The risk engine is tested as pure functions; the decoder and the MCP handler are tested against real Token-2022 mints built in LiteSVM (no devnet, no network). The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected into the handler in tests.
+**34 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes; the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
 
 ## Dependency advisories
 
@@ -74,13 +84,14 @@ None are reachable in the read-only inspection path (one `getAccountInfo` call, 
 
 ```
 src/
-  extension-catalog.ts   ExtensionType to id and label, keyed off the spl-token enum
+  extension-catalog.ts   ExtensionType to id and label, keyed off the spl-token enum plus interface-only codes
   decode-mint.ts         decode a mint account into a serializable structure (errors as values)
   assess-risk.ts         executable form of the skill's compatibility and integration rules
-  inspect.ts             decode + assess, plus the text report formatter
+  inspect.ts             decode + assess, plus the shared text report formatter
+  check-compatibility.ts transport-free check_extension_compatibility handler
   fetch-account.ts       the only IO: one getAccountInfo call
   cli.ts                 CLI entry
   mcp-tool.ts            transport-free inspect_mint handler (testable with an injected fetcher)
-  mcp-server.ts          thin MCP stdio server over mcp-tool.ts
-tests/                   pure risk tests, LiteSVM decode tests, MCP handler tests
+  mcp-server.ts          thin MCP stdio server exposing both tools
+tests/                   pure risk and compatibility tests, LiteSVM decode tests, captured-mint decodes, MCP handler tests
 ```

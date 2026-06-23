@@ -30,6 +30,32 @@ Always pass the correct program id to instruction builders and to associated-tok
 - Integration gaps. Some wallets and venues handle only a subset of extensions. A transfer hook or confidential transfer can block a listing. Confirm support before launch.
 - Irreversible choices. The extension set and several authorities are fixed at creation. There is no in-place upgrade from SPL Token to Token-2022; migration means a new mint (see [migration.md](migration.md)).
 
+## Decision tree: from use case to extension set
+
+Work top to bottom and take every branch that applies (a token can match several). Then validate the combined set against [compatibility-matrix.md](compatibility-matrix.md) before writing code.
+
+1. Does the token ever move between wallets?
+   - No, it is a credential or badge: Non-Transferable. A transfer fee or hook is then moot.
+   - Yes: continue.
+2. Do you need to take value or run logic on every transfer?
+   - A fixed percentage cut: Transfer Fee (taken from the received amount, capped by a maximum fee).
+   - Custom logic such as an allowlist or royalty routing: Transfer Hook plus its ExtraAccountMetaList. Audit it before integrators trust it ([transfer-hook-security.md](transfer-hook-security.md)).
+3. Is it a regulated or compliance-bound asset?
+   - Clawback or forced transfer: Permanent Delegate. Disclose it; a CEX often treats it as a listing blocker.
+   - Allowlist or KYC gating before a holder can transact: Default Account State set to frozen, thawed after approval.
+   - A global stop switch: Pausable.
+4. Does the displayed amount differ from the raw balance?
+   - Accruing yield for display: Interest-Bearing.
+   - A fixed rebasing multiplier: Scaled UI Amount. It cannot be combined with Interest-Bearing; the program rejects that pair at init.
+5. Does the token carry on-chain identity?
+   - Name, symbol, image: Metadata Pointer plus Token Metadata, with no separate metadata program.
+   - Collection or membership: Group and Member Pointer.
+6. Optional housekeeping (combine freely):
+   - Reclaim the mint account at zero supply: Mint Close Authority.
+   - Amount privacy: Confidential Transfer, but it is disabled on mainnet since June 2025 (tracking issue #657) and live on testnet and devnet only. Do not ship it as production code ([confidential-transfer.md](confidential-transfer.md)).
+
+Default rule: pick the smallest set that meets the requirement. Every added extension narrows wallet, DEX, and CEX support ([integration-compatibility.md](integration-compatibility.md)). To validate a planned set fast, run the `/check-extension-compatibility` command or the inspector's `check_extension_compatibility` MCP tool.
+
 ## Map a requirement to an extension
 
 | Requirement | Extension | File |

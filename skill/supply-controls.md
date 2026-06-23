@@ -20,6 +20,9 @@ Allows closing the mint account to reclaim its rent once supply is zero. Without
 ## Pausable
 A pause authority can halt all transfers, mints, and burns by flipping a flag. Integrators must handle the paused state, since every token operation aborts while paused.
 
+## Permissioned Burn
+A newer Token-2022 extension (interface ExtensionType code 28) that gates burning behind a designated authority rather than letting any holder burn freely. Confirm who holds the burn authority, and that wallets, explorers, and custody tooling recognize the extension, before relying on it. Source: spl-token-2022 interface ExtensionType (https://github.com/solana-program/token-2022/blob/main/interface/src/extension/mod.rs).
+
 ## Disclosure
 Permanent Delegate, Default Account State, and Pausable change the trust model. State them plainly in token docs and to any venue that lists the token.
 

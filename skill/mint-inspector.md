@@ -16,7 +16,7 @@ It never signs or sends a transaction. It reads one account.
 - Conflicts: cross-extension problems from [compatibility-matrix.md](compatibility-matrix.md), for example Confidential Transfer with Transfer Hook.
 - Posture: the CEX listing blockers, DEX routing frictions, and wallet caveats, derived from the findings.
 
-An extension code the installed `@solana/spl-token` does not map is reported as unrecognized with its numeric code, not dropped. On a real mainnet mint that surfaces, for example, the confidential transfer fee sub-extension on a client version that predates it.
+The inspector names every extension in the canonical Token-2022 interface, including codes the published `@solana/spl-token` enum does not yet name (for example the confidential transfer fee, code 16, which PYUSD carries, plus confidential mint and burn and permissioned burn). A code that no version maps is still reported as unrecognized with its numeric value, not dropped, so a brand-new extension shows up rather than disappearing.
 
 ## CLI
 

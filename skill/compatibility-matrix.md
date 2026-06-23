@@ -8,7 +8,7 @@ Some extensions cannot be combined, some must be initialized in a specific order
 |-------------|--------|-----|
 | Non-Transferable + Transfer Hook | Logically incompatible | Non-Transferable blocks every transfer, so a hook can never run. Anchor flags the pair, but the base program may still let the mint initialize (verified against the Token-2022 build bundled in LiteSVM, which accepted the init). Pick one; do not rely on an init-time error. |
 | Non-Transferable + Transfer Fee | Pointless, treat as disallowed | A non-transferable token never transfers, so a transfer fee can never apply. |
-| Confidential Transfer + Transfer Hook | Incompatible | A hook needs the cleartext transfer amount; confidential transfers hide it, so they cannot coexist. |
+| Scaled UI Amount + Interest-Bearing | Mutually exclusive, rejected at init | Both rewrite the displayed amount, so the program returns `InvalidExtensionCombination`. Pick one display model. Verified against `check_for_invalid_mint_extension_combinations` in the Token-2022 interface source. |
 
 ## Order-dependent (compatible, but order matters)
 
@@ -23,11 +23,20 @@ Some extensions cannot be combined, some must be initialized in a specific order
 | Item | Caveat |
 |------|--------|
 | Transfer Hook on self-transfer | The hook is not called when source and destination are the same account. Do not rely on a hook as the only guard for an invariant a self-transfer could break. |
+| Confidential Transfer with Transfer Hook | The pair is allowed and coexists on a mint (PYUSD carries both). The hook still fires on a confidential transfer, but Token-2022 passes it `u64::MAX` instead of the real amount, so amount-dependent hook logic applies only to regular transfers. Verified in `confidential_transfer/processor.rs`. |
 | Permanent Delegate vs confidential balances | The permanent delegate does not reach tokens held in a confidential balance. A holder could move tokens out of delegate reach through confidential balances. Mitigate with default-frozen accounts. |
 | Transfer Fee for integrators | The fee is taken from the received amount and withheld on the recipient account, not charged to the sender separately. Escrows and routers must account for the delta, and an account cannot be closed while it holds unharvested withheld fees. |
 | Permanent Delegate trust | The delegate holder can move or burn anyone's tokens. Disclose this to holders and to any integrator. |
 | Default Account State frozen | New accounts can be frozen by default. Vault and transfer logic can strand funds if it does not thaw accounts first. |
 | Pausable | When paused, the program aborts all transfers, mints, and burns. Integrators must handle the paused state. |
+
+## Required companion extensions (enforced at init)
+
+The base program rejects these mints with `InvalidExtensionCombination`, so a valid mint that uses one side must carry the other. Source: `check_for_invalid_mint_extension_combinations`, Token-2022 interface (https://github.com/solana-program/token-2022/blob/main/interface/src/extension/mod.rs).
+
+- Transfer Fee plus Confidential Transfer requires the Confidential Transfer Fee extension: a fee cannot be deducted from an encrypted amount, so withheld fees are stored encrypted. This is why PYUSD, which has both a transfer fee and confidential transfer, also carries Confidential Transfer Fee (extension code 16).
+- Confidential Mint and Burn requires Confidential Transfer.
+- Non-Transferable plus Confidential Transfer requires Confidential Mint and Burn.
 
 ## Ordered initialization recipe (fixed mint extensions plus metadata)
 

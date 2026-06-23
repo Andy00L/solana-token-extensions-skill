@@ -25,7 +25,7 @@ Read the focused skill files only when the task needs them. Start at `skill/SKIL
 Spawn the right agent for the task (token-architect, extensions-engineer, token-2022-auditor, integration-engineer) and use the workflow commands (scaffold-mint, check-extension-compatibility, inspect-mint, audit-transfer-hook, plan-migration, generate-client).
 
 ## Critical constraints
-- Confidential transfers (ConfidentialTransfer, ConfidentialTransferFee, ConfidentialMint and Burn) are disabled on mainnet as of June 2026, tracked in solana-program/token-2022 issue #657. Never present confidential-transfer code as production ready. Explain the status and link the issue.
+- Confidential transfers (ConfidentialTransfer, ConfidentialTransferFee, ConfidentialMintBurn) have been disabled on mainnet since June 2025 and remain disabled as of June 2026 (re-enabled on testnet and devnet only), tracked in solana-program/token-2022 issue #657. Never present confidential-transfer code as production ready. Explain the status and link the issue.
 - Initialize fixed-length mint extensions before `InitializeMint`, in the same transaction as account creation. Initialize Token Metadata after `InitializeMint`.
 - Size every mint account for its exact extension set. Underfunded rent is the most common silent failure.
 - Validate an extension set against `skill/compatibility-matrix.md` before writing code. Some pairs are rejected by the runtime.

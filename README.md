@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
-![Tests](https://img.shields.io/badge/tests-32%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![Stack](https://img.shields.io/badge/stack-January%202026-blue)
 
@@ -23,7 +23,7 @@ flowchart TD
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
     R --> CMD[["6 commands<br/>scaffold-mint, check-compat,<br/>inspect-mint, audit-hook,<br/>plan-migration, gen-client"]]
-    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 32 tests green"]
+    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 50 checks green"]
     S -.proven by.-> EX
     O -.tool.-> EX
 ```
@@ -32,10 +32,10 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 
 ## Why this skill
 
-- **Useful**: covers the full Token-2022 extension surface that builders hit every day, with the init-order and account-sizing gotchas that cause silent failures. It also ships a read-only **mint inspector** (CLI and MCP) that decodes any mint and flags wallet, DEX, and CEX risks, for due diligence without writing code.
-- **Novel**: three documents nobody else ships as a skill: a real **extension compatibility matrix**, a **transfer-hook security audit checklist**, and an accurate **confidential-transfer status** (disabled on mainnet since June 2025, tracking issue [token-2022#657](https://github.com/solana-program/token-2022/issues/657), still open). A lower-effort skill would show confidential-transfer code as live; this one does not. The matrix and the integration rules are not just prose: the mint inspector turns them into an executable risk engine.
-- **Tested**: three reference builds run offline and deterministic. A TypeScript multi-extension mint on LiteSVM (8 tests), a native Rust transfer-hook program (`cargo build-sbf` plus 8 unit tests), and the mint inspector (16 tests). One inaccuracy was found and corrected by actually running the code (see the compatibility matrix note on Non-Transferable plus Transfer Hook).
-- **Fits**: mirrors the reference `solana-game-skill` shape exactly (skill router, focused docs, agents, commands, rules, installer), so it can be submoduled into the kit. The inspector also exposes an MCP `inspect_mint` tool an agent can call directly.
+- **Useful**: covers the full Token-2022 extension surface that builders hit every day, with the init-order and account-sizing gotchas that cause silent failures, plus a use-case decision tree from requirement to extension set. It ships a read-only **mint inspector** (CLI and MCP) that decodes any mint and flags wallet, DEX, and CEX risks, and a second MCP tool, `check_extension_compatibility`, that vets a planned extension set before any code exists.
+- **Novel**: material nobody else ships as a skill: an **extension compatibility matrix** (including the runtime-enforced Scaled UI Amount versus Interest-Bearing exclusion and the required-companion rules), a **transfer-hook security audit checklist**, and an accurate **confidential-transfer status** (disabled on mainnet since June 2025, re-enabled on testnet and devnet only, tracking issue [token-2022#657](https://github.com/solana-program/token-2022/issues/657), still open). The matrix and integration rules are executable: the inspector turns them into a risk engine, and it names extension codes the published `@solana/spl-token` enum does not yet map (such as the confidential transfer fee on PYUSD), so a real mint decodes completely instead of showing "unrecognized".
+- **Tested**: three reference builds run offline and deterministic, 50 checks total. A TypeScript multi-extension mint on LiteSVM (7 tests plus a transfer-hook end-to-end scenario), a native Rust transfer-hook program (`cargo build-sbf` plus 8 unit tests), and the mint inspector (34 tests, including offline decodes of five captured mainnet mints: PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT). Two inaccuracies were caught and corrected by running the code against PYUSD: a confidential-transfer-with-hook pair wrongly flagged as incompatible (PYUSD carries both), and an extension code the inspector now names instead of dropping.
+- **Fits**: mirrors the reference skill shape (skill router, focused docs, agents, commands, rules, installer), so it can be submoduled into the kit. The inspector exposes two MCP tools, `inspect_mint` and `check_extension_compatibility`, that an agent can call directly.
 
 ## What's included
 
@@ -49,7 +49,7 @@ Reference: `resources.md`.
 
 ### Tools
 
-`mint-inspector.md` documents a read-only inspector that decodes a live mint's extensions and reports its wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP `inspect_mint` tool in `examples/mint-inspector`, with offline tests.
+`mint-inspector.md` documents a read-only inspector that decodes a live mint's extensions and reports its wallet, DEX, and CEX integration risks. It ships as a CLI and two MCP tools in `examples/mint-inspector`: `inspect_mint` (decode and assess a live mint) and `check_extension_compatibility` (vet a planned extension set before any mint exists), with offline tests.
 
 ### Core (delegated to solana-dev-skill)
 
@@ -76,8 +76,8 @@ Repo-relative links inside the copied agents and commands are rewritten to the i
 
 - Program: `spl-token-2022`, accessed through anchor-spl `token_interface` so code serves both SPL Token and Token-2022 mints.
 - Client: `@solana/kit` for transactions and codecs, `@solana/spl-token` for extension instruction builders.
-- Tests: LiteSVM for offline extension behavior. `solana-bankrun` is deprecated and not used.
-- Confidential transfers: disabled on mainnet as of June 2026. Not presented as production ready.
+- Tests: LiteSVM for offline extension behavior, run one file per process by the test runner (the native addon is stable that way). `solana-bankrun` is deprecated and not used.
+- Confidential transfers: disabled on mainnet since June 2025, still disabled as of June 2026 (re-enabled on testnet and devnet only, issue #657). Not presented as production ready.
 
 ## Tested reference code
 
@@ -88,12 +88,12 @@ cd examples
 make verify     # builds the Rust hook, then runs the TS, inspector, and Rust suites
 ```
 
-What passes:
+What passes (50 checks):
 
-- `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. Further tests assert that an out-of-order initialization is rejected and that the fee is capped and floored correctly. **8 tests, LiteSVM, offline.**
+- `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the four extensions are present, the fee is withheld on receive and withdrawable, and the metadata reads back. Further tests assert that an out-of-order initialization is rejected and that the fee is capped and floored correctly. **7 tests, LiteSVM, offline.**
 - `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, per-destination PDA validation, and an `AddToAllowlist` instruction gated on the mint authority. `cargo build-sbf` produces a deployable program and `cargo test` runs **8 unit tests**.
-- End to end: the `transfer-hook-e2e` test loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`.
-- `examples/mint-inspector`: the read-only mint inspector (CLI and MCP). The risk engine is tested as pure functions, the decoder against real Token-2022 mints built in LiteSVM, and the MCP handler with an injected fetcher. **16 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
+- End to end: `integration/transfer-hook-e2e.ts` loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`. It runs under tsx (`npm run e2e`): LiteSVM's native addon is stable in a plain process but aborts intermittently inside a vitest worker, so this BPF-executing scenario runs outside vitest.
+- `examples/mint-inspector`: the read-only mint inspector (CLI and two MCP tools). The risk engine is tested as pure functions, the decoder against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and the MCP handler with an injected fetcher. **34 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
 
 A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 
@@ -104,12 +104,12 @@ A captured run is committed at `examples/VERIFICATION_OUTPUT.txt`.
 | `@solana/spl-token` | 0.4.14 | npmjs.com/package/@solana/spl-token |
 | `@solana/spl-token-metadata` | 0.1.6 | npm |
 | `@solana/web3.js` | 1.98.4 | npm |
-| `litesvm` (JS) | 0.6.0 | npmjs.com/package/litesvm |
+| `litesvm` (JS) | 0.6.x | npmjs.com/package/litesvm (1.x moved to @solana/kit Address types; pinned to the web3.js 1.x line) |
 | `spl-token-2022` (Rust) | 11.0.0 | docs.rs/spl-token-2022 |
 | `spl-transfer-hook-interface` | 2.1.0 | docs.rs/spl-transfer-hook-interface |
 | `spl-tlv-account-resolution` | 0.11.1 | docs.rs/spl-tlv-account-resolution |
 | Toolchain | solana-cli 3.1.9, cargo-build-sbf 3.1.9, Node 22 | local |
-| Confidential transfers | disabled on mainnet | github.com/solana-program/token-2022/issues/657 |
+| Confidential transfers | disabled on mainnet since June 2025 | github.com/solana-program/token-2022/issues/657 |
 
 ## Agents
 
@@ -140,9 +140,9 @@ solana-token-extensions-skill/
 ├── commands/                  6 workflow commands
 ├── rules/                     rust.md, typescript.md (code style law)
 ├── examples/
-│   ├── ts-multi-extension-mint/    TypeScript mint + LiteSVM tests
+│   ├── ts-multi-extension-mint/    TypeScript mint + LiteSVM tests + e2e integration script
 │   ├── transfer-hook-allowlist/    native Rust hook + unit tests
-│   ├── mint-inspector/             read-only mint inspector (CLI + MCP) + offline tests
+│   ├── mint-inspector/             read-only mint inspector (CLI + 2 MCP tools) + offline tests
 │   ├── Makefile                    make verify
 │   └── VERIFICATION_OUTPUT.txt     committed run transcript
 ├── CLAUDE.md                  skill agent configuration
