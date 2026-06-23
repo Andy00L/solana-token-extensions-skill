@@ -6,8 +6,9 @@
   "description": "Token-2022 mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, with offline LiteSVM tests.",
   "license": "MIT",
   "scripts": {
-    "test": "node run-tests.mjs",
+    "test": "tsc --noEmit && node run-tests.mjs",
     "test:once": "vitest run",
+    "e2e": "tsx integration/transfer-hook-e2e.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }
