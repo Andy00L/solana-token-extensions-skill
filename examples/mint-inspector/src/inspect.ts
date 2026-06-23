@@ -69,6 +69,20 @@ export function formatReport(inspection: Inspection): string {
   }
 
   lines.push("");
+  for (const line of formatAssessmentLines(assessment)) {
+    lines.push(line);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Render the findings, conflicts, and posture of an assessment as text lines.
+ * Shared by the mint report and the standalone compatibility check so both keep
+ * one format and the rendering logic lives in one place.
+ */
+export function formatAssessmentLines(assessment: Assessment): string[] {
+  const lines: string[] = [];
   lines.push(`Integration findings (${assessment.findings.length}), overall severity: ${assessment.posture.overallSeverity}`);
   if (assessment.findings.length === 0) {
     lines.push("  none");
@@ -95,8 +109,7 @@ export function formatReport(inspection: Inspection): string {
   lines.push(`  CEX listing blockers:  ${formatList(assessment.posture.cexBlockers)}`);
   lines.push(`  DEX routing frictions: ${formatList(assessment.posture.dexFrictions)}`);
   lines.push(`  Wallet caveats:        ${formatList(assessment.posture.walletCaveats)}`);
-
-  return lines.join("\n");
+  return lines;
 }
 
 function formatList(values: string[]): string {

@@ -54,4 +54,28 @@ describe("assessExtensions", () => {
     expect(assessment.findings).toHaveLength(1);
     expect(assessment.findings[0].severity).toBe("low");
   });
+
+  it("treats confidential transfer with a hook as a low caveat, not a high conflict", () => {
+    const assessment = assessExtensions(["confidential-transfer", "transfer-hook"]);
+
+    const conflict = assessment.conflicts.find((entry) => entry.extensions.includes("confidential-transfer"));
+    expect(conflict?.severity).toBe("low");
+    expect(conflict?.title.toLowerCase()).toContain("no real amount");
+  });
+
+  it("flags scaled UI amount with interest-bearing as a high init-rejection conflict", () => {
+    const assessment = assessExtensions(["scaled-ui-amount", "interest-bearing"]);
+
+    expect(assessment.conflicts).toHaveLength(1);
+    expect(assessment.conflicts[0].severity).toBe("high");
+    expect(assessment.posture.overallSeverity).toBe("high");
+  });
+
+  it("surfaces a low cex finding for the permissioned-burn extension", () => {
+    const assessment = assessExtensions(["permissioned-burn"]);
+
+    expect(assessment.findings).toHaveLength(1);
+    expect(assessment.findings[0].severity).toBe("low");
+    expect(assessment.posture.cexBlockers).toHaveLength(0);
+  });
 });

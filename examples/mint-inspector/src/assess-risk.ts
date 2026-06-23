@@ -71,7 +71,7 @@ const RISK_RULES: Record<string, RiskRule> = {
     cexImpact: "blocker",
     title: "Confidential transfer extension present",
     detail:
-      "Confidential transfers and the ZK ElGamal Proof Program are disabled on mainnet as of June 2026 (tracking issue token-2022#657) and tooling support is narrow. Do not assume confidential operations work on mainnet.",
+      "Confidential transfers and the ZK ElGamal Proof Program have been disabled on mainnet since June 2025 (still disabled as of June 2026; re-enabled on testnet and devnet only, tracking issue token-2022#657), and tooling support is narrow. Do not assume confidential operations work on mainnet.",
     sourceRef: "skill/confidential-transfer.md",
   },
   "permanent-delegate": {
@@ -184,6 +184,30 @@ const RISK_RULES: Record<string, RiskRule> = {
     detail: "Declares this mint as a member of a group. Tooling support for groups varies.",
     sourceRef: "skill/metadata-and-groups.md",
   },
+  "confidential-transfer-fee": {
+    severity: "info",
+    surfaces: [],
+    title: "Confidential transfer fee configured",
+    detail:
+      "Holds the fee config for confidential transfers. It only takes effect when confidential transfers run, which they do not on mainnet (disabled since June 2025, tracking issue token-2022#657). It appears alongside the confidential transfer extension on mints like PYUSD.",
+    sourceRef: "skill/confidential-transfer.md",
+  },
+  "confidential-mint-burn": {
+    severity: "info",
+    surfaces: [],
+    title: "Confidential mint and burn configured",
+    detail:
+      "Supports minting and burning against confidential balances. Like other confidential operations it depends on the ZK ElGamal Proof Program, which is disabled on mainnet (tracking issue token-2022#657).",
+    sourceRef: "skill/confidential-transfer.md",
+  },
+  "permissioned-burn": {
+    severity: "low",
+    surfaces: ["cex"],
+    title: "Permissioned burn restricts who can burn",
+    detail:
+      "A newer Token-2022 extension that gates burning behind a designated authority rather than the token holder. Confirm who holds that authority and that your wallet, explorer, and custody tooling recognize the extension before relying on it.",
+    sourceRef: "skill/supply-controls.md",
+  },
   unrecognized: {
     severity: "low",
     surfaces: ["wallet", "dex"],
@@ -219,10 +243,27 @@ const CONFLICT_RULES: ConflictRule[] = [
     sourceRef: "skill/compatibility-matrix.md",
   },
   {
+    // Verified against the Token-2022 source: confidential transfers and a hook
+    // coexist on a mint (PYUSD ships both on mainnet). The hook still fires on a
+    // confidential transfer, but the program passes it u64::MAX instead of the
+    // real amount, so amount-dependent hook logic is bypassed on that path.
+    // Source: program/src/extension/confidential_transfer/processor.rs (invoke_execute with u64::MAX).
     pair: ["confidential-transfer", "transfer-hook"],
+    severity: "low",
+    title: "Confidential Transfer with Transfer Hook: the hook sees no real amount on confidential transfers",
+    detail:
+      "The two are compatible and coexist on a mint (PYUSD carries both). The hook fires on every transfer, but on a confidential transfer Token-2022 passes the hook u64::MAX rather than the cleartext amount, so any hook rule that depends on the amount applies only to regular transfers, not confidential ones.",
+    sourceRef: "skill/compatibility-matrix.md",
+  },
+  {
+    // Runtime-enforced: check_for_invalid_mint_extension_combinations rejects this
+    // pair because both rewrite the displayed amount.
+    // Source: interface/src/extension/mod.rs (check_for_invalid_mint_extension_combinations).
+    pair: ["scaled-ui-amount", "interest-bearing"],
     severity: "high",
-    title: "Confidential Transfer with Transfer Hook is incompatible",
-    detail: "A hook needs the cleartext transfer amount, and confidential transfers hide it.",
+    title: "Scaled UI Amount with Interest-Bearing is rejected at init",
+    detail:
+      "Both extensions rewrite the displayed amount, so Token-2022 rejects a mint that declares both with InvalidExtensionCombination. Choose one display model: a fixed multiplier (Scaled UI Amount) or an accruing rate (Interest-Bearing).",
     sourceRef: "skill/compatibility-matrix.md",
   },
 ];

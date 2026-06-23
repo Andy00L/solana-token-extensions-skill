@@ -9,7 +9,10 @@ import { ExtensionType } from "@solana/spl-token";
 export type ExtensionSurface = "mint" | "account";
 
 export type ExtensionCatalogEntry = {
-  code: ExtensionType;
+  // Numeric ExtensionType code. Typed as number (not the enum) because a few codes
+  // are defined by the canonical spl-token-2022 interface but not yet named by the
+  // published @solana/spl-token enum; those are added in INTERFACE_ONLY_ENTRIES.
+  code: number;
   id: string;
   label: string;
   surface: ExtensionSurface;
@@ -39,8 +42,24 @@ const CATALOG_ENTRIES: ExtensionCatalogEntry[] = [
   { code: ExtensionType.CpiGuard, id: "cpi-guard", label: "CPI Guard", surface: "account" },
 ];
 
+// Codes the canonical spl-token-2022 interface defines but the published
+// @solana/spl-token JS enum (0.4.14) does not name: it skips 16, 17, 24, and 28.
+// They are listed as numeric literals taken from the interface enum and cited
+// below (not guessed), so a real mint that carries one is labeled instead of
+// falling through to "unrecognized". PayPal USD (PYUSD), for example, carries code 16.
+// Source: spl-token-2022-interface ExtensionType (#[repr(u16)]),
+// https://github.com/solana-program/token-2022/blob/main/interface/src/extension/mod.rs
+const INTERFACE_ONLY_ENTRIES: ExtensionCatalogEntry[] = [
+  { code: 16, id: "confidential-transfer-fee", label: "Confidential Transfer Fee", surface: "mint" },
+  { code: 17, id: "confidential-transfer-fee-amount", label: "Confidential Transfer Fee Amount", surface: "account" },
+  { code: 24, id: "confidential-mint-burn", label: "Confidential Mint and Burn", surface: "mint" },
+  { code: 28, id: "permissioned-burn", label: "Permissioned Burn", surface: "mint" },
+];
+
+const ALL_ENTRIES: ExtensionCatalogEntry[] = [...CATALOG_ENTRIES, ...INTERFACE_ONLY_ENTRIES];
+
 const CATALOG_BY_CODE: Map<number, ExtensionCatalogEntry> = new Map(
-  CATALOG_ENTRIES.map((entry) => [entry.code, entry]),
+  ALL_ENTRIES.map((entry) => [entry.code, entry]),
 );
 
 /** Look up a catalog entry by its numeric ExtensionType code, or null if unknown. */
@@ -50,5 +69,5 @@ export function lookupExtension(code: number): ExtensionCatalogEntry | null {
 
 /** The full catalog, read-only, for callers that enumerate supported extensions. */
 export function catalogEntries(): readonly ExtensionCatalogEntry[] {
-  return CATALOG_ENTRIES;
+  return ALL_ENTRIES;
 }

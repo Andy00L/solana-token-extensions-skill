@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * MCP stdio server exposing one tool, inspect_mint, so an agent in the Solana AI
- * Kit can inspect a mint without writing code. It is a thin transport over the
- * tested handleInspectMint core: it wires the SDK to that handler and formats the
- * result. The tool is read only and never signs, sends, or logs any secret.
+ * MCP stdio server exposing two read-only tools, inspect_mint and
+ * check_extension_compatibility, so an agent in the Solana AI Kit can inspect a
+ * live mint and vet a proposed extension set without writing code. It is a thin
+ * transport over the tested handler cores: it wires the SDK to them and formats
+ * the result. Both tools are read only and never sign, send, or log any secret.
  * Source: @modelcontextprotocol/sdk server/mcp.js (registerTool) and server/stdio.js.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,6 +15,7 @@ import { describeError } from "./describe-error";
 import { type FetchError, fetchMintAccount, formatFetchError } from "./fetch-account";
 import { formatDecodeError, formatReport } from "./inspect";
 import { handleInspectMint } from "./mcp-tool";
+import { checkCompatibility, formatCompatibilityReport } from "./check-compatibility";
 
 // Solana public mainnet RPC. Source: https://solana.com/docs/core/clusters
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
@@ -59,6 +61,27 @@ server.registerTool(
       content: [
         { type: "text", text: formatReport(output.inspection) },
         { type: "text", text: JSON.stringify(output.inspection) },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "check_extension_compatibility",
+  {
+    title: "Check a Token-2022 extension set",
+    description:
+      "Validate a proposed set of Token-2022 extension ids for conflicts and wallet, DEX, and CEX integration posture, before writing any mint code. Read only and offline. Pass extension ids such as transfer-fee, transfer-hook, permanent-delegate, confidential-transfer, non-transferable, interest-bearing, scaled-ui-amount, pausable, default-account-state.",
+    inputSchema: {
+      extensions: z.array(z.string()).describe("extension ids to validate together"),
+    },
+  },
+  async (args) => {
+    const result = checkCompatibility({ extensions: args.extensions });
+    return {
+      content: [
+        { type: "text", text: formatCompatibilityReport(result) },
+        { type: "text", text: JSON.stringify(result) },
       ],
     };
   },
