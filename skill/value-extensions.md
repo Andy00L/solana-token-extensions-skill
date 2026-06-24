@@ -13,8 +13,8 @@ Stores a continuously compounding rate in basis points. The raw balance never ch
 Applies a fixed multiplier to the displayed amount (rebasing display). Distinct from interest-bearing: it is a set multiplier, not a time-based accrual.
 - Convert offline with `amountToUiAmountForScaledUiAmountMintWithoutSimulation(amount, decimals, multiplier)`.
 
-## Do not combine them
-Both rescale the UI amount. Combining interest-bearing and scaled UI amount on one mint is confusing and is not recommended. Pick one.
+## Cannot be combined (rejected at init)
+Both rescale the UI amount, so Token-2022 rejects a mint that declares both with `InvalidExtensionCombination`. This is a runtime exclusion enforced by the program, not just a recommendation: pick one display model, a fixed multiplier (Scaled UI Amount) or an accruing rate (Interest-Bearing). Verified against `check_for_invalid_mint_extension_combinations` in the interface source; see [compatibility-matrix.md](compatibility-matrix.md).
 
 ## Integrator notes
 - Wallets and explorers must use the UI amount helpers to show correct balances, or they will display the raw amount.

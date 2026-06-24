@@ -1,5 +1,5 @@
 make verify, captured 2026-06-24.
-All examples build and test offline (no validator, no devnet). 54 checks green.
+All examples build and test offline (no validator, no devnet). 55 checks green.
 
 $ cd examples && make verify
 
@@ -9,17 +9,18 @@ cd transfer-hook-allowlist && cargo build-sbf && cargo test
     Finished `test` profile [unoptimized + debuginfo] target(s)
      Running unittests src/lib.rs
 
-running 8 tests
-test processor::tests::add_to_allowlist_requires_signer ... ok
-test processor::tests::execute_rejects_too_few_accounts ... ok
+running 9 tests
 test error::tests::errors_map_to_distinct_codes ... ok
+test processor::tests::add_to_allowlist_rejects_a_mint_not_owned_by_token_2022 ... ok
+test processor::tests::add_to_allowlist_requires_signer ... ok
+test processor::tests::execute_denies_when_not_transferring ... ok
+test processor::tests::execute_rejects_too_few_accounts ... ok
 test processor::tests::initialize_requires_authority_signer ... ok
 test processor::tests::process_rejects_empty_input ... ok
-test processor::tests::execute_denies_when_not_transferring ... ok
 test processor::tests::validation_list_builds_and_initializes ... ok
-test processor::tests::allow_pda_is_deterministic_and_destination_specific ... ok
+test processor::tests::allow_pda_is_deterministic_and_scoped_to_mint_and_destination ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 === ts-multi-extension-mint (TypeScript + LiteSVM, one file per process) ===
 cd ts-multi-extension-mint && npm ci && npm test
@@ -42,10 +43,10 @@ cd mint-inspector && npm ci && npm test
  => 38 tests (5 captured mainnet mints, a built controls mint, and a token-account decode)
 
 === Summary ===
-Rust hook:       8 cargo unit tests
+Rust hook:       9 cargo unit tests
 ts-multi mint:   7 LiteSVM tests + 1 transfer-hook e2e scenario
 mint-inspector: 38 offline tests (mints and a token account, 5 captured mainnet mints)
-Total:          54 checks, all green.
+Total:          55 checks, all green.
 
 Note on the runner: LiteSVM's native addon aborts intermittently (std::bad_alloc)
 inside a vitest worker, never under a plain node process. run-tests.mjs runs each

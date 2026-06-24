@@ -26,8 +26,9 @@ use spl_transfer_hook_interface::{
 
 use crate::{error::AllowlistError, ADD_TO_ALLOWLIST_DISCRIMINATOR, ALLOW_SEED_PREFIX};
 
-// Account index of the destination token account in the Execute instruction.
-// Source: spl-transfer-hook-interface Execute account ordering.
+// Account indices in the Execute instruction: source=0, mint=1, destination=2,
+// owner=3, validation=4. Source: spl-transfer-hook-interface Execute account ordering.
+const MINT_ACCOUNT_INDEX: u8 = 1;
 const DESTINATION_ACCOUNT_INDEX: u8 = 2;
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
@@ -72,6 +73,11 @@ fn process_initialize(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramR
         &[
             Seed::Literal {
                 bytes: ALLOW_SEED_PREFIX.to_vec(),
+            },
+            // Scope the allow PDA to the mint as well as the destination, so a hook
+            // program shared by two mints never shares one allowlist (checklist item 4).
+            Seed::AccountKey {
+                index: MINT_ACCOUNT_INDEX,
             },
             Seed::AccountKey {
                 index: DESTINATION_ACCOUNT_INDEX,
@@ -125,6 +131,15 @@ fn process_add_to_allowlist(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pr
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    // Validate the mint before trusting any field on it. An account whose owner is
+    // not the Token-2022 program can be crafted to carry a forged mint authority,
+    // which would make the authority gate below meaningless (checklist item 4;
+    // rules/rust.md "check account ownership"). Compare by bytes so the program
+    // id's Address type and the account's Pubkey type line up.
+    if mint_info.owner.to_bytes() != spl_token_2022::id().to_bytes() {
+        return Err(AllowlistError::UnexpectedMintOwner.into());
+    }
+
     // Only the mint authority may manage the allowlist. Compare by bytes so the
     // mint's Address type and the account's Pubkey type line up.
     {
@@ -139,8 +154,14 @@ fn process_add_to_allowlist(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pr
         }
     }
 
+    // The allow PDA is scoped to (mint, destination), so the allowlist belongs to
+    // this mint alone (checklist item 4).
     let (expected_allow, bump) = Pubkey::find_program_address(
-        &[ALLOW_SEED_PREFIX, destination_info.key.as_ref()],
+        &[
+            ALLOW_SEED_PREFIX,
+            mint_info.key.as_ref(),
+            destination_info.key.as_ref(),
+        ],
         program_id,
     );
     if expected_allow != *allow_info.key {
@@ -151,7 +172,12 @@ fn process_add_to_allowlist(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pr
     }
 
     let bump_seed = [bump];
-    let signer_seeds = [ALLOW_SEED_PREFIX, destination_info.key.as_ref(), &bump_seed];
+    let signer_seeds = [
+        ALLOW_SEED_PREFIX,
+        mint_info.key.as_ref(),
+        destination_info.key.as_ref(),
+        &bump_seed,
+    ];
     let space: usize = 1; // a single marker byte; its presence means allowed
     let space_u64 = u64::try_from(space).map_err(|_| ProgramError::InvalidAccountData)?;
     let rent = Rent::get()?;
@@ -173,19 +199,25 @@ fn process_add_to_allowlist(program_id: &Pubkey, accounts: &[AccountInfo]) -> Pr
 fn process_execute(program_id: &Pubkey, accounts: &[AccountInfo], _amount: u64) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let source_info = next_account_info(account_info_iter)?;
-    let _mint_info = next_account_info(account_info_iter)?;
+    let mint_info = next_account_info(account_info_iter)?;
     let destination_info = next_account_info(account_info_iter)?;
     let _owner_info = next_account_info(account_info_iter)?;
     let _validation_info = next_account_info(account_info_iter)?;
     let allow_info = next_account_info(account_info_iter)?;
 
-    // Gate on a real transfer so Execute cannot be invoked standalone.
-    assert_is_transferring(source_info)?;
-    assert_is_transferring(destination_info)?;
+    // Gate on a real transfer (so Execute cannot be invoked standalone) and confirm
+    // each token account belongs to this mint, so account order alone is never
+    // trusted (checklist items 2 and 5).
+    assert_transferring_account_of_mint(source_info, mint_info.key)?;
+    assert_transferring_account_of_mint(destination_info, mint_info.key)?;
 
-    // The allow account must be the expected per-destination PDA.
+    // The allow account must be the expected per-(mint, destination) PDA.
     let (expected_allow, _bump) = Pubkey::find_program_address(
-        &[ALLOW_SEED_PREFIX, destination_info.key.as_ref()],
+        &[
+            ALLOW_SEED_PREFIX,
+            mint_info.key.as_ref(),
+            destination_info.key.as_ref(),
+        ],
         program_id,
     );
     if expected_allow != *allow_info.key {
@@ -199,11 +231,19 @@ fn process_execute(program_id: &Pubkey, accounts: &[AccountInfo], _amount: u64) 
     Ok(())
 }
 
-/// Reject unless the token account carries the TransferHookAccount extension with
-/// the transferring flag set. Source: transfer-hook-security.md, checklist item 2.
-fn assert_is_transferring(account_info: &AccountInfo) -> ProgramResult {
+/// Reject unless the token account belongs to `expected_mint` (checklist item 5)
+/// and carries the TransferHookAccount extension with the transferring flag set
+/// (checklist item 2). Source: transfer-hook-security.md, checklist items 2 and 5.
+fn assert_transferring_account_of_mint(
+    account_info: &AccountInfo,
+    expected_mint: &Pubkey,
+) -> ProgramResult {
     let account_data = account_info.try_borrow_data()?;
     let account = PodStateWithExtensions::<PodAccount>::unpack(&account_data)?;
+    // Compare by bytes so the account's Address type and the Pubkey type line up.
+    if account.base.mint.to_bytes() != expected_mint.to_bytes() {
+        return Err(AllowlistError::AccountMintMismatch.into());
+    }
     let extension = account.get_extension::<TransferHookAccount>()?;
     if bool::from(extension.transferring) {
         Ok(())
@@ -221,26 +261,38 @@ mod tests {
     }
 
     #[test]
-    fn allow_pda_is_deterministic_and_destination_specific() {
+    fn allow_pda_is_deterministic_and_scoped_to_mint_and_destination() {
         let program = test_program_id();
+        let mint = Pubkey::new_from_array([8u8; 32]);
         let destination = Pubkey::new_from_array([9u8; 32]);
-        let (first, _) =
-            Pubkey::find_program_address(&[ALLOW_SEED_PREFIX, destination.as_ref()], &program);
-        let (again, _) =
-            Pubkey::find_program_address(&[ALLOW_SEED_PREFIX, destination.as_ref()], &program);
-        assert_eq!(first, again);
-        let other = Pubkey::new_from_array([10u8; 32]);
-        let (other_pda, _) =
-            Pubkey::find_program_address(&[ALLOW_SEED_PREFIX, other.as_ref()], &program);
-        assert_ne!(first, other_pda);
+        let derive = |seed_mint: &Pubkey, seed_destination: &Pubkey| {
+            Pubkey::find_program_address(
+                &[ALLOW_SEED_PREFIX, seed_mint.as_ref(), seed_destination.as_ref()],
+                &program,
+            )
+            .0
+        };
+        // Deterministic for the same (mint, destination).
+        assert_eq!(derive(&mint, &destination), derive(&mint, &destination));
+        // A different destination yields a different PDA.
+        let other_destination = Pubkey::new_from_array([10u8; 32]);
+        assert_ne!(derive(&mint, &destination), derive(&mint, &other_destination));
+        // The same destination under a different mint yields a different PDA, so two
+        // mints sharing this hook never share an allowlist (checklist item 4).
+        let other_mint = Pubkey::new_from_array([11u8; 32]);
+        assert_ne!(derive(&mint, &destination), derive(&other_mint, &destination));
     }
 
     #[test]
     fn validation_list_builds_and_initializes() {
+        // Mirror the program's allow-PDA seeds: literal, mint (index 1), destination (index 2).
         let metas = [ExtraAccountMeta::new_with_seeds(
             &[
                 Seed::Literal {
                     bytes: ALLOW_SEED_PREFIX.to_vec(),
+                },
+                Seed::AccountKey {
+                    index: MINT_ACCOUNT_INDEX,
                 },
                 Seed::AccountKey {
                     index: DESTINATION_ACCOUNT_INDEX,
@@ -264,8 +316,9 @@ mod tests {
 
     #[test]
     fn execute_denies_when_not_transferring() {
-        // Six accounts with empty token data: the transferring gate fails, so
-        // Execute denies (fail closed). Source: transfer-hook-security.md item 2.
+        // Six accounts with empty token data: the account reads fail closed (empty
+        // data does not unpack as a token account of the mint, and carries no
+        // transferring flag), so Execute denies. Source: transfer-hook-security.md items 2, 5.
         let program = test_program_id();
         let owner = Pubkey::new_from_array([0u8; 32]); // the system program id
         let source_key = Pubkey::new_from_array([21u8; 32]);
@@ -392,6 +445,44 @@ mod tests {
         assert_eq!(
             process(&program, &accounts, &data),
             Err(ProgramError::MissingRequiredSignature)
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_rejects_a_mint_not_owned_by_token_2022() {
+        // Adversarial: a crafted, mint-sized account owned by the system program is
+        // passed as the mint. The authority signs, so we pass the signer check and
+        // reach the owner check, which must reject before the forged authority field
+        // is ever trusted. Source: transfer-hook-security.md item 4, rules/rust.md.
+        let program = test_program_id();
+        let non_token_owner = Pubkey::new_from_array([0u8; 32]); // the system program id
+        let authority_key = Pubkey::new_from_array([70u8; 32]);
+        let mint_key = Pubkey::new_from_array([71u8; 32]);
+        let allow_key = Pubkey::new_from_array([72u8; 32]);
+        let destination_key = Pubkey::new_from_array([73u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut authority_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut mint_data: Vec<u8> = vec![0u8; 82]; // mint-sized bytes, but the wrong owner
+        let mut allow_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            // authority IS a signer here, so the owner check (not the signer check) fires
+            AccountInfo::new(&authority_key, true, true, &mut authority_lamports, &mut authority_data, &non_token_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &non_token_owner, false),
+            AccountInfo::new(&allow_key, false, true, &mut allow_lamports, &mut allow_data, &non_token_owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &non_token_owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &non_token_owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(AllowlistError::UnexpectedMintOwner.into())
         );
     }
 }

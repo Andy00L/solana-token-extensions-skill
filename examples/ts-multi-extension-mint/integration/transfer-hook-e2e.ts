@@ -142,8 +142,9 @@ function runTransferHookE2e(): void {
   );
   assert(!didFail(minted), "mint-to and ATA creation should succeed");
 
+  // The allow PDA is scoped to (mint, destination), matching the hook's seeds.
   const [allowPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from(ALLOW_SEED), recipientAccount.toBuffer()],
+    [Buffer.from(ALLOW_SEED), mint.publicKey.toBuffer(), recipientAccount.toBuffer()],
     hookProgramId,
   );
 

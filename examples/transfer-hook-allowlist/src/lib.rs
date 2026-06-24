@@ -1,4 +1,5 @@
-//! A fail-closed Token-2022 transfer hook that enforces a per-destination allowlist.
+//! A fail-closed Token-2022 transfer hook that enforces a per-destination allowlist,
+//! scoped to the mint so two mints sharing this hook never share an allowlist.
 //!
 //! Security properties (see ../../skill/transfer-hook-security.md):
 //! - Fail closed: Execute denies unless the destination's allow PDA exists.
@@ -6,7 +7,11 @@
 //!   so it cannot be called standalone.
 //! - Read-only accounts: the hook treats every transfer account as read only and
 //!   never assumes a signer.
-//! - PDA validation: the allow account must equal the expected per-destination PDA.
+//! - Validated mint: AddToAllowlist rejects a mint account not owned by the
+//!   Token-2022 program before trusting its authority, and Execute confirms each
+//!   token account belongs to the mint (checklist items 4 and 5).
+//! - PDA validation: the allow account must equal the expected per-(mint,
+//!   destination) PDA, so two mints sharing this hook never share an allowlist.
 
 // The Solana entrypoint macro emits internal `custom-heap` and `custom-panic`
 // cfgs that newer rustc flags as unexpected. They are benign macro internals.
@@ -21,7 +26,7 @@ use solana_program::{
 
 pub use error::AllowlistError;
 
-/// Seed prefix for a per-destination allow account. Source: this program.
+/// Seed prefix for an allow account, keyed by (mint, destination). Source: this program.
 pub const ALLOW_SEED_PREFIX: &[u8] = b"allow";
 
 /// Program-specific instruction tag for AddToAllowlist. Chosen so it does not

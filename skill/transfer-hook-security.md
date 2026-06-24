@@ -1,6 +1,6 @@
 # Transfer hook security and audit checklist
 
-A transfer hook runs on every transfer of its mint. A buggy or malicious hook can block transfers, grief integrators, or freeze a token. This file is the checklist for writing and for auditing a hook. The example program in `examples/transfer-hook-allowlist` implements every check below, and its allow and block paths are proven by an end-to-end test through a real Token-2022 transfer.
+A transfer hook runs on every transfer of its mint. A buggy or malicious hook can block transfers, grief integrators, or freeze a token. This file is the checklist for writing and for auditing a hook. The example program in `examples/transfer-hook-allowlist` implements the in-program checks below (fail closed, the transferring-flag gate, read-only handling, mint and account-linkage validation, and per-(mint, destination) PDA scoping) and follows the operational guidance (items 10 to 12). Its allow and block paths are proven by an end-to-end test through a real Token-2022 transfer.
 
 ## Threat model
 - A hook author can block specific recipients, exhaust compute to freeze all transfers, or require accounts an integrator cannot provide.

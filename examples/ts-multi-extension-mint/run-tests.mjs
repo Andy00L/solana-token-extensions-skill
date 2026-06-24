@@ -15,7 +15,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const MAX_ATTEMPTS = 10; // per file; covers the intermittent native crash
+// Per file. The native crash can hit in streaks (per-attempt rate is high), so the
+// cap is generous; a genuine assertion failure carries no crash marker and still
+// fails on the first attempt, so this never masks a real failure.
+const MAX_ATTEMPTS = 40;
 const NATIVE_CRASH_PATTERN = /bad_alloc|Worker exited unexpectedly/;
 const TEST_DIR = "tests";
 const INTEGRATION_DIR = "integration";

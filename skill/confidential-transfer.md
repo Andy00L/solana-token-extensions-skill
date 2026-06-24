@@ -15,7 +15,7 @@ Do not present confidential-transfer code as production ready in 2026. If a user
 3. If the user is building for a future re-enablement, mark the code clearly as not deployable today, and pin to the official examples once the audits complete.
 
 ## Why this matters for a builder
-- A mint cannot combine confidential transfer with a transfer hook, because a hook needs the cleartext amount.
+- Confidential transfer and a transfer hook can coexist on one mint (PYUSD carries both), but on a confidential transfer the program passes the hook `u64::MAX` instead of the cleartext amount, so any amount-dependent hook logic applies only to regular transfers. See [compatibility-matrix.md](compatibility-matrix.md).
 - A permanent delegate does not reach confidentially held balances. A compliance design that relies on a permanent delegate must also freeze accounts by default or disable confidential balances.
 - Wallet and DEX support for confidential transfers is narrow even when the feature is enabled. Treat it as opt-in with limited integration.
 
