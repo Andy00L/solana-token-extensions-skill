@@ -1,6 +1,6 @@
 # Mint inspector: decode a live mint and assess integration risk
 
-A read-only tool that takes a mint address, decodes its Token-2022 extensions from on-chain data, and reports the wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP server in `examples/mint-inspector`. Use it for due diligence on a token you did not mint: before integrating it, routing it, or listing it.
+A read-only tool that takes a mint or token account address, decodes its Token-2022 extensions from on-chain data, and reports the integration risk. For a mint it reports the wallet, DEX, and CEX risks; for a token account it reports the balance, frozen state, withheld fees, and account extensions (immutable owner, CPI guard, required memo). It ships as a CLI and an MCP server in `examples/mint-inspector`. Use it for due diligence on a token you did not mint: before integrating it, routing it, or listing it.
 
 It never signs or sends a transaction. It reads one account.
 

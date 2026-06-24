@@ -1,5 +1,5 @@
-make verify, captured 2026-06-22.
-All examples build and test offline (no validator, no devnet). 51 checks green.
+make verify, captured 2026-06-24.
+All examples build and test offline (no validator, no devnet). 54 checks green.
 
 $ cd examples && make verify
 
@@ -33,19 +33,19 @@ cd ts-multi-extension-mint && npm ci && npm test
 === mint-inspector (TypeScript + LiteSVM, one file per process) ===
 cd mint-inspector && npm ci && npm test
  (tsc --noEmit: ok)
- PASS tests/assess-risk.test.ts          (9 tests)
- PASS tests/check-compatibility.test.ts  (5 tests)
- PASS tests/decode-inspect.test.ts       (7 tests)
- PASS tests/extension-catalog.test.ts    (4 tests)
- PASS tests/mcp-tool.test.ts             (4 tests)
- PASS tests/real-mint-decode.test.ts     (6 tests)
- => 35 tests (includes offline decodes of PYUSD, USDC, BERN, sUSD, a WNS hooked NFT, and a built controls mint)
+ PASS tests/assess-risk.test.ts          (11 tests)
+ PASS tests/check-compatibility.test.ts   (5 tests)
+ PASS tests/decode-inspect.test.ts        (8 tests)
+ PASS tests/extension-catalog.test.ts     (4 tests)
+ PASS tests/mcp-tool.test.ts              (4 tests)
+ PASS tests/real-mint-decode.test.ts      (6 tests)
+ => 38 tests (5 captured mainnet mints, a built controls mint, and a token-account decode)
 
 === Summary ===
 Rust hook:       8 cargo unit tests
 ts-multi mint:   7 LiteSVM tests + 1 transfer-hook e2e scenario
-mint-inspector: 35 offline tests (5 captured mainnet mints decoded from committed bytes)
-Total:          51 checks, all green.
+mint-inspector: 38 offline tests (mints and a token account, 5 captured mainnet mints)
+Total:          54 checks, all green.
 
 Note on the runner: LiteSVM's native addon aborts intermittently (std::bad_alloc)
 inside a vitest worker, never under a plain node process. run-tests.mjs runs each

@@ -1,6 +1,6 @@
 # mint-inspector
 
-A read-only tool that decodes a Solana mint's Token-2022 extensions from on-chain data and reports the wallet, DEX, and CEX integration risks. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
+A read-only tool that decodes a Solana mint or token account from on-chain data: its Token-2022 extensions and, for a mint, the wallet, DEX, and CEX integration risks. For a token account it reports the balance, frozen state, withheld fees, and account extensions. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
 
 ![Inspecting the PayPal USD (PYUSD) mint](demo.gif)
 
@@ -73,7 +73,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**35 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM and against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes; the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**38 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
 
 ## Dependency advisories
 

@@ -1,0 +1,38 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Runs the deterministic part of `make verify` in a clean Linux environment: the
+# Rust hook unit tests, the mint inspector, and the multi-extension mint suites.
+# The transfer-hook end-to-end scenario needs `cargo build-sbf` (the Solana
+# platform tools) and is verified locally via `make verify`; it is skipped here so
+# the badge stays reliable. The committed examples/VERIFICATION_OUTPUT.txt records
+# a full local run including the e2e.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Rust hook unit tests
+        working-directory: examples/transfer-hook-allowlist
+        run: cargo test
+
+      - name: Mint inspector (tsc + tests)
+        working-directory: examples/mint-inspector
+        run: npm ci && npm test
+
+      - name: Multi-extension mint (tsc + tests)
+        working-directory: examples/ts-multi-extension-mint
+        run: npm ci && npm test

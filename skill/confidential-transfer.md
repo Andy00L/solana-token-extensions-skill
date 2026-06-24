@@ -22,5 +22,6 @@ Do not present confidential-transfer code as production ready in 2026. If a user
 ## What to do today
 - For amount privacy on mainnet, there is no live Token-2022 path right now. Document that constraint instead of shipping code that cannot run.
 - Watch issue #657 for the re-enable timeline and the post-audit examples.
+- Contingency: if issue #657 closes and confidential transfers are re-enabled on mainnet (they already run on testnet and devnet), this status flips. Treat confidential-transfer code as live, re-check wallet and DEX support, and update the inspector finding and this file. Until that issue closes, assume disabled on mainnet.
 
 Sources: ZK ElGamal post-mortem June 2025 (https://solana.com/news/post-mortem-june-25-2025), re-enable tracking issue (https://github.com/solana-program/token-2022/issues/657), SPL Token-2022 extensions reference (https://www.solana-program.com/docs/token-2022/extensions).
