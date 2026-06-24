@@ -10,22 +10,31 @@
  */
 import { type AccountInfo, PublicKey } from "@solana/web3.js";
 import {
+  ACCOUNT_SIZE,
+  type Account,
   AccountState,
+  AccountType,
   ExtensionType,
+  MINT_SIZE,
   type Mint,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  getCpiGuard,
   getDefaultAccountState,
   getExtensionData,
   getExtensionTypes,
   getInterestBearingMintConfigState,
+  getMemoTransfer,
   getMetadataPointerState,
   getMintCloseAuthority,
   getPausableConfig,
   getPermanentDelegate,
   getScaledUiAmountConfig,
+  getTransferFeeAmount,
   getTransferFeeConfig,
   getTransferHook,
+  getTransferHookAccount,
+  unpackAccount,
   unpackMint,
 } from "@solana/spl-token";
 import { unpack } from "@solana/spl-token-metadata";
@@ -295,4 +304,147 @@ function describeOptionalKey(key: PublicKey | null | undefined): string {
     return "none";
   }
   return key.toBase58();
+}
+
+// --- Token account decoding -------------------------------------------------
+
+export type DecodedTokenAccount = {
+  address: string;
+  programId: string;
+  programKind: TokenProgramKind;
+  mint: string;
+  owner: string;
+  amount: string;
+  isFrozen: boolean;
+  isNative: boolean;
+  delegate: string | null;
+  delegatedAmount: string;
+  closeAuthority: string | null;
+  extensions: DecodedExtension[];
+};
+
+export type DecodedEntity =
+  | { kind: "mint"; mint: DecodedMint }
+  | { kind: "token-account"; account: DecodedTokenAccount };
+
+export type EntityDecodeResult =
+  | { status: "ok"; entity: DecodedEntity }
+  | { status: "error"; reason: DecodeError };
+
+/**
+ * Decode an account as either a Token-2022 (or classic SPL Token) mint or a token
+ * account, detecting which from the data length and the account-type byte that
+ * Token-2022 stores at offset ACCOUNT_SIZE. Pure: the caller performs the IO.
+ */
+export function decodeTokenEntity(address: PublicKey, accountInfo: AccountInfo<Buffer> | null): EntityDecodeResult {
+  if (accountInfo === null) {
+    return { status: "error", reason: { kind: "account-not-found" } };
+  }
+  const programKind = classifyOwner(accountInfo.owner);
+  if (programKind === null) {
+    return { status: "error", reason: { kind: "wrong-owner", owner: accountInfo.owner.toBase58() } };
+  }
+
+  if (classifyEntityKind(accountInfo.data) === "token-account") {
+    const programId = programKind === "token-2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+    // Parsing boundary: unpackAccount throws on a wrong-size or non-account buffer.
+    let account: Account;
+    try {
+      account = unpackAccount(address, accountInfo, programId);
+    } catch (parseError) {
+      return { status: "error", reason: { kind: "not-a-mint", detail: describeError(parseError) } };
+    }
+    return {
+      status: "ok",
+      entity: { kind: "token-account", account: buildDecodedTokenAccount(address, accountInfo, programKind, account) },
+    };
+  }
+
+  // A mint, or an unrecognized size that decodeMint rejects with a typed error.
+  const mintResult = decodeMint(address, accountInfo);
+  if (mintResult.status === "error") {
+    return { status: "error", reason: mintResult.reason };
+  }
+  return { status: "ok", entity: { kind: "mint", mint: mintResult.mint } };
+}
+
+/** Detect whether an account buffer is a token mint or a token account. */
+function classifyEntityKind(data: Buffer): "mint" | "token-account" | "unknown" {
+  if (data.length === MINT_SIZE) {
+    return "mint";
+  }
+  if (data.length === ACCOUNT_SIZE) {
+    return "token-account";
+  }
+  if (data.length > ACCOUNT_SIZE) {
+    // Token-2022 stores the account type at offset ACCOUNT_SIZE for accounts that
+    // carry extensions. Source: @solana/spl-token state/account.ts (AccountType, ACCOUNT_SIZE).
+    const accountType = data[ACCOUNT_SIZE];
+    if (accountType === AccountType.Mint) {
+      return "mint";
+    }
+    if (accountType === AccountType.Account) {
+      return "token-account";
+    }
+  }
+  return "unknown";
+}
+
+function buildDecodedTokenAccount(
+  address: PublicKey,
+  accountInfo: AccountInfo<Buffer>,
+  programKind: TokenProgramKind,
+  account: Account,
+): DecodedTokenAccount {
+  // Classic SPL Token accounts carry no extension TLV; only Token-2022 accounts do.
+  const extensions = programKind === "token-2022" ? decodeAccountExtensions(account) : [];
+  return {
+    address: address.toBase58(),
+    programId: accountInfo.owner.toBase58(),
+    programKind,
+    mint: account.mint.toBase58(),
+    owner: account.owner.toBase58(),
+    amount: account.amount.toString(),
+    isFrozen: account.isFrozen,
+    isNative: account.isNative,
+    delegate: account.delegate === null ? null : account.delegate.toBase58(),
+    delegatedAmount: account.delegatedAmount.toString(),
+    closeAuthority: account.closeAuthority === null ? null : account.closeAuthority.toBase58(),
+    extensions,
+  };
+}
+
+function decodeAccountExtensions(account: Account): DecodedExtension[] {
+  return getExtensionTypes(account.tlvData).map((code) => describeAccountExtension(account, code));
+}
+
+function describeAccountExtension(account: Account, code: ExtensionType): DecodedExtension {
+  const entry = lookupExtension(code);
+  if (entry === null) {
+    return { code, id: "unrecognized", label: `Unrecognized extension (code ${code})`, detail: {} };
+  }
+  return { code, id: entry.id, label: entry.label, detail: enrichAccountExtension(account, code) };
+}
+
+function enrichAccountExtension(account: Account, code: ExtensionType): Record<string, string> {
+  switch (code) {
+    case ExtensionType.TransferFeeAmount: {
+      const fee = getTransferFeeAmount(account);
+      return fee === null ? {} : { withheldAmount: fee.withheldAmount.toString() };
+    }
+    case ExtensionType.MemoTransfer: {
+      const memo = getMemoTransfer(account);
+      return memo === null ? {} : { requireIncomingMemo: String(memo.requireIncomingTransferMemos) };
+    }
+    case ExtensionType.CpiGuard: {
+      const guard = getCpiGuard(account);
+      return guard === null ? {} : { lockCpi: String(guard.lockCpi) };
+    }
+    case ExtensionType.TransferHookAccount: {
+      const hookAccount = getTransferHookAccount(account);
+      return hookAccount === null ? {} : { transferring: String(hookAccount.transferring) };
+    }
+    default:
+      return {};
+  }
 }

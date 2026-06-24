@@ -333,3 +333,104 @@ function computePosture(extensionIds: string[], findings: Finding[], conflicts: 
 function dedupe(values: string[]): string[] {
   return [...new Set(values)];
 }
+
+export type AccountAssessment = {
+  findings: Finding[];
+  overallSeverity: Severity;
+};
+
+export type TokenAccountInput = {
+  extensionIds: string[];
+  isFrozen: boolean;
+  withheldAmount: string | null;
+};
+
+// Notes for the account-level extensions a token account can carry. Keyed by the
+// account-surface ids from extension-catalog.ts.
+const ACCOUNT_NOTES: Record<string, Omit<Finding, "extension">> = {
+  "cpi-guard": {
+    severity: "info",
+    surfaces: [],
+    title: "CPI Guard enabled",
+    detail:
+      "Protective: it blocks approve, close, set-authority, and similar actions when invoked through a cross-program call, reducing the blast radius of a malicious program.",
+    sourceRef: "skill/account-extensions.md",
+  },
+  "required-memo-on-transfer": {
+    severity: "low",
+    surfaces: [],
+    title: "Requires a memo on incoming transfers",
+    detail:
+      "Incoming transfers must be preceded by a memo instruction or the transfer is rejected. Anything sending to this account must include one.",
+    sourceRef: "skill/account-extensions.md",
+  },
+  "immutable-owner": {
+    severity: "info",
+    surfaces: [],
+    title: "Immutable owner",
+    detail: "The account owner cannot be changed. This is standard for associated token accounts.",
+    sourceRef: "skill/account-extensions.md",
+  },
+  "non-transferable-account": {
+    severity: "info",
+    surfaces: [],
+    title: "Non-transferable account",
+    detail: "It belongs to a non-transferable (soulbound) mint, so the balance can only be burned, never transferred out.",
+    sourceRef: "skill/supply-controls.md",
+  },
+  "transfer-hook-account": {
+    severity: "info",
+    surfaces: [],
+    title: "Transfer hook account flag",
+    detail: "Carries the transferring flag a hook program reads during a transfer. It is transient state, set only mid-transfer.",
+    sourceRef: "skill/transfer-hook.md",
+  },
+  "pausable-account": {
+    severity: "info",
+    surfaces: [],
+    title: "Pausable account",
+    detail: "It belongs to a pausable mint, so transfers are blocked while the mint is paused.",
+    sourceRef: "skill/supply-controls.md",
+  },
+};
+
+/** Assess a decoded token account's state and account-level extensions. */
+export function assessTokenAccount(input: TokenAccountInput): AccountAssessment {
+  const findings: Finding[] = [];
+
+  if (input.isFrozen) {
+    findings.push({
+      extension: "frozen",
+      severity: "high",
+      surfaces: [],
+      title: "Account is frozen",
+      detail: "The account is frozen and cannot send or receive until a freeze authority thaws it.",
+      sourceRef: "skill/supply-controls.md",
+    });
+  }
+
+  if (input.withheldAmount !== null && input.withheldAmount !== "0") {
+    findings.push({
+      extension: "transfer-fee-amount",
+      severity: "medium",
+      surfaces: [],
+      title: "Holds unharvested withheld transfer fees",
+      detail: `The account holds ${input.withheldAmount} base units of withheld transfer fees, taken from amounts it received. It cannot be closed until they are harvested back to the mint.`,
+      sourceRef: "skill/transfer-fee.md",
+    });
+  }
+
+  for (const extensionId of input.extensionIds) {
+    const note = ACCOUNT_NOTES[extensionId];
+    if (note !== undefined) {
+      findings.push({ extension: extensionId, ...note });
+    }
+  }
+
+  findings.sort((left, right) => severityRank(right.severity) - severityRank(left.severity));
+  const overallSeverity = findings.reduce<Severity>(
+    (max, finding) => (severityRank(finding.severity) > severityRank(max) ? finding.severity : max),
+    "info",
+  );
+  return { findings, overallSeverity };
+}

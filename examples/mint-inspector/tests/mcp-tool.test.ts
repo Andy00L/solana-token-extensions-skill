@@ -21,6 +21,9 @@ describe("handleInspectMint", () => {
     if (output.status !== "ok") {
       return;
     }
+    if (output.inspection.kind !== "mint") {
+      return;
+    }
     expect(output.inspection.mint.programKind).toBe("token-2022");
     expect(output.inspection.assessment.posture.cexBlockers).toContain("transfer-hook");
   });

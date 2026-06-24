@@ -32,6 +32,10 @@ import {
   createInitializeScaledUiAmountConfigInstruction,
   createInitializeTransferFeeConfigInstruction,
   createInitializeTransferHookInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createMintToCheckedInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
   getMintLen,
 } from "@solana/spl-token";
 import { type TokenMetadata, createInitializeInstruction, pack } from "@solana/spl-token-metadata";
@@ -230,4 +234,53 @@ export function createClassicMint(svm: LiteSVM, payer: Keypair): PublicKey {
   ]);
 
   return mint;
+}
+
+/**
+ * A Token-2022 token account (not a mint) that has received a fee-bearing transfer,
+ * so it carries withheld transfer fees and, being an associated token account, an
+ * immutable owner. Built offline to exercise the token-account decode path.
+ */
+export function createInspectableTokenAccount(svm: LiteSVM, payer: Keypair): { account: PublicKey; owner: PublicKey } {
+  const mintKeypair = Keypair.generate();
+  const mint = mintKeypair.publicKey;
+  const authority = payer.publicKey;
+  const holder = Keypair.generate();
+
+  const mintLength = getMintLen([ExtensionType.TransferFeeConfig]);
+  const rentLamports = svm.minimumBalanceForRentExemption(BigInt(mintLength));
+  sendMintTransaction(svm, payer, mintKeypair, [
+    SystemProgram.createAccount({
+      fromPubkey: authority,
+      newAccountPubkey: mint,
+      space: mintLength,
+      lamports: Number(rentLamports),
+      programId: TOKEN_2022_PROGRAM_ID,
+    }),
+    createInitializeTransferFeeConfigInstruction(mint, authority, authority, DEMO_FEE_BASIS_POINTS, DEMO_MAX_FEE, TOKEN_2022_PROGRAM_ID),
+    createInitializeMint2Instruction(mint, DEMO_DECIMALS, authority, authority, TOKEN_2022_PROGRAM_ID),
+  ]);
+
+  const sourceAccount = getAssociatedTokenAddressSync(mint, authority, false, TOKEN_2022_PROGRAM_ID);
+  const holderAccount = getAssociatedTokenAddressSync(mint, holder.publicKey, false, TOKEN_2022_PROGRAM_ID);
+  const transferAmount = 1_000_000_000n; // 1 token at 9 decimals, unit: base units
+
+  // Create both accounts, mint to the source, and transfer to the holder. The
+  // transfer withholds the fee on the holder account. All signed by the payer.
+  svm.expireBlockhash();
+  const transaction = new Transaction().add(
+    createAssociatedTokenAccountIdempotentInstruction(authority, sourceAccount, authority, mint, TOKEN_2022_PROGRAM_ID),
+    createAssociatedTokenAccountIdempotentInstruction(authority, holderAccount, holder.publicKey, mint, TOKEN_2022_PROGRAM_ID),
+    createMintToCheckedInstruction(mint, sourceAccount, authority, transferAmount, DEMO_DECIMALS, [], TOKEN_2022_PROGRAM_ID),
+    createTransferCheckedInstruction(sourceAccount, mint, holderAccount, authority, transferAmount, DEMO_DECIMALS, [], TOKEN_2022_PROGRAM_ID),
+  );
+  transaction.recentBlockhash = svm.latestBlockhash();
+  transaction.feePayer = authority;
+  transaction.sign(payer);
+  const result = svm.sendTransaction(transaction);
+  if (result instanceof FailedTransactionMetadata) {
+    throw new Error(`fixture token-account build failed: ${result.meta().logs().join("; ")}`);
+  }
+
+  return { account: holderAccount, owner: holder.publicKey };
 }

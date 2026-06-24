@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessExtensions } from "../src/assess-risk";
+import { assessExtensions, assessTokenAccount } from "../src/assess-risk";
 
 describe("assessExtensions", () => {
   it("flags transfer hook and permanent delegate as CEX blockers, fee as friction", () => {
@@ -77,5 +77,30 @@ describe("assessExtensions", () => {
     expect(assessment.findings).toHaveLength(1);
     expect(assessment.findings[0].severity).toBe("low");
     expect(assessment.posture.cexBlockers).toHaveLength(0);
+  });
+
+  it("flags a frozen token account holding withheld fees as high severity", () => {
+    const assessment = assessTokenAccount({
+      extensionIds: ["transfer-fee-amount", "immutable-owner"],
+      isFrozen: true,
+      withheldAmount: "5000000",
+    });
+
+    expect(assessment.overallSeverity).toBe("high");
+    expect(assessment.findings.some((finding) => finding.title.toLowerCase().includes("frozen"))).toBe(true);
+    expect(assessment.findings.some((finding) => finding.title.toLowerCase().includes("withheld"))).toBe(true);
+  });
+
+  it("notes cpi guard and required memo on a healthy token account", () => {
+    const assessment = assessTokenAccount({
+      extensionIds: ["cpi-guard", "required-memo-on-transfer", "immutable-owner"],
+      isFrozen: false,
+      withheldAmount: null,
+    });
+
+    expect(assessment.overallSeverity).toBe("low");
+    const titles = assessment.findings.map((finding) => finding.title);
+    expect(titles.some((title) => title.includes("CPI Guard"))).toBe(true);
+    expect(titles.some((title) => title.toLowerCase().includes("memo"))).toBe(true);
   });
 });

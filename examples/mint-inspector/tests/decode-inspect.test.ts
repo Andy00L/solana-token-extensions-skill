@@ -6,6 +6,7 @@ import { formatReport, inspectAccount } from "../src/inspect";
 import {
   createClassicMint,
   createControlsMint,
+  createInspectableTokenAccount,
   createNonTransferableHookMint,
   createRichMint,
   fundedPayer,
@@ -21,6 +22,9 @@ describe("inspectAccount over real on-chain mint data", () => {
     const result = inspectAccount(mint, readAccountInfo(svm, mint));
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
+      return;
+    }
+    if (result.inspection.kind !== "mint") {
       return;
     }
 
@@ -62,6 +66,9 @@ describe("inspectAccount over real on-chain mint data", () => {
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
 
     const extensionIds = result.inspection.mint.extensions.map((extension) => extension.id);
     expect(extensionIds).toContain("scaled-ui-amount");
@@ -90,6 +97,9 @@ describe("inspectAccount over real on-chain mint data", () => {
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
 
     const conflictTitles = result.inspection.assessment.conflicts.map((conflict) => conflict.title.toLowerCase());
     expect(conflictTitles.some((title) => title.includes("logically incompatible"))).toBe(true);
@@ -103,6 +113,9 @@ describe("inspectAccount over real on-chain mint data", () => {
     const result = inspectAccount(mint, readAccountInfo(svm, mint));
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
+      return;
+    }
+    if (result.inspection.kind !== "mint") {
       return;
     }
 
@@ -154,5 +167,33 @@ describe("inspectAccount over real on-chain mint data", () => {
       return;
     }
     expect(result.reason.kind).toBe("not-a-mint");
+  });
+
+  it("decodes a Token-2022 token account, not just mints (withheld fees, immutable owner)", () => {
+    const svm = new LiteSVM();
+    const payer = fundedPayer(svm);
+    const { account, owner } = createInspectableTokenAccount(svm, payer);
+
+    const result = inspectAccount(account, readAccountInfo(svm, account));
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") {
+      return;
+    }
+    if (result.inspection.kind !== "token-account") {
+      return;
+    }
+    const decoded = result.inspection.account;
+    expect(decoded.programKind).toBe("token-2022");
+    expect(decoded.owner).toBe(owner.toBase58());
+    // The holder received 1e9 base units and 5e6 (0.50%) was withheld as the fee.
+    expect(decoded.amount).toBe("995000000");
+
+    const extensionIds = decoded.extensions.map((extension) => extension.id);
+    expect(extensionIds).toContain("transfer-fee-amount");
+    expect(extensionIds).toContain("immutable-owner");
+
+    const transferFeeAmount = decoded.extensions.find((extension) => extension.id === "transfer-fee-amount");
+    expect(transferFeeAmount?.detail.withheldAmount).toBe("5000000");
+    expect(result.inspection.assessment.findings.some((finding) => finding.extension === "transfer-fee-amount")).toBe(true);
   });
 });

@@ -35,11 +35,15 @@ const CATALOG_ENTRIES: ExtensionCatalogEntry[] = [
   { code: ExtensionType.TokenGroupMember, id: "token-group-member", label: "Token Group Member", surface: "mint" },
   { code: ExtensionType.ScaledUiAmountConfig, id: "scaled-ui-amount", label: "Scaled UI Amount", surface: "mint" },
   { code: ExtensionType.PausableConfig, id: "pausable", label: "Pausable", surface: "mint" },
-  // Account-level extensions. A mint never carries these, but they are included so
-  // the catalog stays complete if reused to label a token-account TLV.
+  // Account-level extensions. A mint never carries these; they are used to label a
+  // token-account TLV when the inspector decodes a token account rather than a mint.
   { code: ExtensionType.ImmutableOwner, id: "immutable-owner", label: "Immutable Owner", surface: "account" },
   { code: ExtensionType.MemoTransfer, id: "required-memo-on-transfer", label: "Required Memo on Transfer", surface: "account" },
   { code: ExtensionType.CpiGuard, id: "cpi-guard", label: "CPI Guard", surface: "account" },
+  { code: ExtensionType.TransferFeeAmount, id: "transfer-fee-amount", label: "Transfer Fee Amount", surface: "account" },
+  { code: ExtensionType.NonTransferableAccount, id: "non-transferable-account", label: "Non-Transferable Account", surface: "account" },
+  { code: ExtensionType.TransferHookAccount, id: "transfer-hook-account", label: "Transfer Hook Account", surface: "account" },
+  { code: ExtensionType.PausableAccount, id: "pausable-account", label: "Pausable Account", surface: "account" },
 ];
 
 // Codes the canonical spl-token-2022 interface defines but the published

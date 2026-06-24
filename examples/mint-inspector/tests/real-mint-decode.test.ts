@@ -27,6 +27,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
     const { mint, assessment } = result.inspection;
     expect(mint.programKind).toBe("token-2022");
     expect(mint.decimals).toBe(6);
@@ -60,6 +63,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
     const { conflicts } = result.inspection.assessment;
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].severity).toBe("low");
@@ -76,6 +82,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
     expect(result.inspection.mint.programKind).toBe("spl-token");
     expect(result.inspection.mint.extensions).toHaveLength(0);
     expect(result.inspection.assessment.findings).toHaveLength(0);
@@ -85,6 +94,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     const result = inspectFixture("BERN");
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
+      return;
+    }
+    if (result.inspection.kind !== "mint") {
       return;
     }
     expect(result.inspection.mint.decimals).toBe(5);
@@ -98,6 +110,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     if (result.status !== "ok") {
       return;
     }
+    if (result.inspection.kind !== "mint") {
+      return;
+    }
     const interestBearing = result.inspection.mint.extensions.find((extension) => extension.id === "interest-bearing");
     expect(interestBearing?.detail.currentRateBps).toBe("2623");
     const tokenMetadata = result.inspection.mint.extensions.find((extension) => extension.id === "token-metadata");
@@ -108,6 +123,9 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     const result = inspectFixture("BNDRG");
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
+      return;
+    }
+    if (result.inspection.kind !== "mint") {
       return;
     }
     const transferHook = result.inspection.mint.extensions.find((extension) => extension.id === "transfer-hook");

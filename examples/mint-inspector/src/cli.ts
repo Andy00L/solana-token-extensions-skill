@@ -21,7 +21,7 @@ const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 const USAGE = [
   "Usage: inspect-mint <MINT_ADDRESS> [--rpc <URL>] [--json]",
   "",
-  "  <MINT_ADDRESS>   base58 mint address to inspect",
+  "  <MINT_ADDRESS>   base58 mint or token account address to inspect",
   `  --rpc <URL>      RPC endpoint (default: ${DEFAULT_RPC_URL})`,
   "  --json           print the inspection as JSON instead of text",
   "  -h, --help       show this help",

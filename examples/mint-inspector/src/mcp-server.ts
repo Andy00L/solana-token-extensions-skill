@@ -39,9 +39,9 @@ server.registerTool(
   {
     title: "Inspect a Token-2022 mint",
     description:
-      "Decode a Solana mint's Token-2022 extensions and report wallet, DEX, and CEX integration risks. Read only: it fetches public account data and never signs or sends.",
+      "Decode a Solana mint or token account. For a mint: its Token-2022 extensions and the wallet, DEX, and CEX integration risks. For a token account: its balance, frozen state, withheld fees, and account extensions. Read only: it fetches public account data and never signs or sends.",
     inputSchema: {
-      mintAddress: z.string().describe("base58 mint address to inspect"),
+      mintAddress: z.string().describe("base58 mint or token account address to inspect"),
       rpcUrl: z.string().optional().describe("RPC endpoint; defaults to Solana mainnet-beta"),
     },
   },
