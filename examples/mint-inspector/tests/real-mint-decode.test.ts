@@ -51,10 +51,15 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     const tokenMetadata = mint.extensions.find((extension) => extension.id === "token-metadata");
     expect(tokenMetadata?.detail.symbol).toBe("PYUSD");
 
-    expect(assessment.posture.overallSeverity).toBe("high");
+    // PYUSD's permanent delegate is live, so the verdict is critical and the score saturates.
+    expect(assessment.posture.overallSeverity).toBe("critical");
+    expect(assessment.posture.score).toBe(100);
     expect(assessment.posture.cexBlockers).toEqual(
-      expect.arrayContaining(["permanent-delegate", "confidential-transfer", "transfer-hook"]),
+      expect.arrayContaining(["permanent-delegate", "confidential-transfer"]),
     );
+    // PYUSD's transfer-hook extension has no program set, so it is a medium latent
+    // caveat, not a hard listing blocker (contrast with BNDRG's active hook).
+    expect(assessment.posture.cexBlockers).not.toContain("transfer-hook");
   });
 
   it("treats PYUSD's confidential-transfer-with-hook as a low caveat, not a false incompatibility", () => {

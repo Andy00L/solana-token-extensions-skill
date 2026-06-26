@@ -52,7 +52,7 @@ Work top to bottom and take every branch that applies (a token can match several
    - Collection or membership: Group and Member Pointer.
 6. Optional housekeeping (combine freely):
    - Reclaim the mint account at zero supply: Mint Close Authority.
-   - Amount privacy: Confidential Transfer, but it is disabled on mainnet since June 2025 (tracking issue #657) and live on testnet and devnet only. Do not ship it as production code ([confidential-transfer.md](confidential-transfer.md)).
+   - Amount privacy: Confidential Transfer, but it is disabled on mainnet since June 2025, re-enablement pending (tracking issue #657). Do not ship it as production code ([confidential-transfer.md](confidential-transfer.md)).
 
 Default rule: pick the smallest set that meets the requirement. Every added extension narrows wallet, DEX, and CEX support ([integration-compatibility.md](integration-compatibility.md)). To validate a planned set fast, run the `/check-extension-compatibility` command or the inspector's `check_extension_compatibility` MCP tool.
 

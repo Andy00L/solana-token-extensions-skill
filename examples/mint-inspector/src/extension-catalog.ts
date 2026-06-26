@@ -40,6 +40,7 @@ const CATALOG_ENTRIES: ExtensionCatalogEntry[] = [
   { code: ExtensionType.ImmutableOwner, id: "immutable-owner", label: "Immutable Owner", surface: "account" },
   { code: ExtensionType.MemoTransfer, id: "required-memo-on-transfer", label: "Required Memo on Transfer", surface: "account" },
   { code: ExtensionType.CpiGuard, id: "cpi-guard", label: "CPI Guard", surface: "account" },
+  { code: ExtensionType.ConfidentialTransferAccount, id: "confidential-transfer-account", label: "Confidential Transfer Account", surface: "account" },
   { code: ExtensionType.TransferFeeAmount, id: "transfer-fee-amount", label: "Transfer Fee Amount", surface: "account" },
   { code: ExtensionType.NonTransferableAccount, id: "non-transferable-account", label: "Non-Transferable Account", surface: "account" },
   { code: ExtensionType.TransferHookAccount, id: "transfer-hook-account", label: "Transfer Hook Account", surface: "account" },

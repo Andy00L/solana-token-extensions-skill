@@ -3,8 +3,15 @@
  * Pure: takes an already-fetched account, so it runs offline and deterministic.
  */
 import type { AccountInfo, PublicKey } from "@solana/web3.js";
-import { type AccountAssessment, type Assessment, assessExtensions, assessTokenAccount } from "./assess-risk";
-import { type DecodeError, type DecodedMint, type DecodedTokenAccount, decodeTokenEntity } from "./decode-mint";
+import {
+  type AccountAssessment,
+  type AssessedExtension,
+  type Assessment,
+  assessExtensions,
+  assessTokenAccount,
+  controllingAuthorityKey,
+} from "./assess-risk";
+import { type DecodeError, type DecodedExtension, type DecodedMint, type DecodedTokenAccount, decodeTokenEntity } from "./decode-mint";
 
 export type Inspection =
   | { kind: "mint"; mint: DecodedMint; assessment: Assessment }
@@ -32,8 +39,31 @@ export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buff
     return { status: "ok", inspection: { kind: "token-account", account, assessment } };
   }
   const mint = decoded.entity.mint;
-  const assessment = assessExtensions(mint.extensions.map((extension) => extension.id));
+  const assessedExtensions = mint.extensions.map(toAssessedExtension);
+  // The base mint and freeze authorities are assessed only for Token-2022 mints;
+  // a classic SPL mint is reported as having no Token-2022 extensions.
+  const assessment =
+    mint.programKind === "token-2022"
+      ? assessExtensions(assessedExtensions, {
+          mintAuthorityLive: mint.mintAuthority !== null,
+          freezeAuthorityLive: mint.freezeAuthority !== null,
+        })
+      : assessExtensions(assessedExtensions);
   return { status: "ok", inspection: { kind: "mint", mint, assessment } };
+}
+
+/**
+ * Map a decoded extension to an assessment input, deriving whether its controlling
+ * authority is renounced from the decoded detail (an unset authority renders as
+ * "none"). This drives conditional severity: a dormant authority is lower risk.
+ */
+function toAssessedExtension(extension: DecodedExtension): AssessedExtension {
+  const key = controllingAuthorityKey(extension.id);
+  if (key === null) {
+    return { id: extension.id };
+  }
+  const value = extension.detail[key];
+  return { id: extension.id, authorityRenounced: value === undefined || value === "none" };
 }
 
 /** A human-readable decode error message. */
@@ -125,13 +155,15 @@ function formatTokenAccountReport(account: DecodedTokenAccount, assessment: Acco
   }
 
   lines.push("");
-  lines.push(`Account findings (${assessment.findings.length}), overall severity: ${assessment.overallSeverity}`);
+  lines.push(`Account verdict: ${assessment.overallSeverity.toUpperCase()} (risk score ${assessment.score}/100)`);
+  lines.push(`Account findings (${assessment.findings.length}):`);
   if (assessment.findings.length === 0) {
     lines.push("  none");
   }
   for (const finding of assessment.findings) {
     lines.push(`  [${finding.severity.toUpperCase()}] ${finding.title}`);
     lines.push(`      ${finding.detail}`);
+    lines.push(`      fix: ${finding.remediation}`);
     lines.push(`      source: ${finding.sourceRef}`);
   }
 
@@ -145,7 +177,8 @@ function formatTokenAccountReport(account: DecodedTokenAccount, assessment: Acco
  */
 export function formatAssessmentLines(assessment: Assessment): string[] {
   const lines: string[] = [];
-  lines.push(`Integration findings (${assessment.findings.length}), overall severity: ${assessment.posture.overallSeverity}`);
+  lines.push(`Verdict: ${assessment.posture.overallSeverity.toUpperCase()} (risk score ${assessment.posture.score}/100)`);
+  lines.push(`Integration findings (${assessment.findings.length}):`);
   if (assessment.findings.length === 0) {
     lines.push("  none");
   }
@@ -153,6 +186,7 @@ export function formatAssessmentLines(assessment: Assessment): string[] {
     const surfaces = finding.surfaces.length === 0 ? "informational" : finding.surfaces.join(", ");
     lines.push(`  [${finding.severity.toUpperCase()}] ${finding.title} (${surfaces})`);
     lines.push(`      ${finding.detail}`);
+    lines.push(`      fix: ${finding.remediation}`);
     lines.push(`      source: ${finding.sourceRef}`);
   }
 

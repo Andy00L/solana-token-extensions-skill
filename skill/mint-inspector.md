@@ -12,11 +12,11 @@ It never signs or sends a transaction. It reads one account.
 ## What it reports
 - Mint basics: program (Token-2022 or classic SPL), decimals, raw supply, mint and freeze authorities.
 - Extensions: each present extension with key fields. Transfer fee shows basis points and the max fee. Transfer hook shows the hook program id (or `none` when the extension is present but no program is set). Permanent delegate shows the delegate. Default account state shows frozen or initialized. Token metadata shows name, symbol, and uri.
-- Findings: one per extension, ranked by severity, each naming the affected surfaces (wallet, DEX, CEX) and citing the skill document that backs the claim.
+- Findings: one per extension and per base authority (mint, freeze), ranked by severity (critical, high, medium, low, info). Severity is conditional on authority liveness: a fund-loss-grade extension scores high only while its controlling authority is live, so a renounced permanent delegate or a locked fee rate scores far lower. Each finding names the affected surfaces (wallet, DEX, CEX), a concrete `fix:`, and the skill document that backs the claim.
 - Conflicts: cross-extension problems from [compatibility-matrix.md](compatibility-matrix.md), for example Confidential Transfer with Transfer Hook.
-- Posture: the CEX listing blockers, DEX routing frictions, and wallet caveats, derived from the findings.
+- Posture: a verdict tier and a 0-to-100 risk score, plus the CEX listing blockers, DEX routing frictions, and wallet caveats, derived from the findings. A renounced authority downgrades its finding and clears the CEX block.
 
-The inspector names every extension in the canonical Token-2022 interface, including codes the published `@solana/spl-token` enum does not yet name (for example the confidential transfer fee, code 16, which PYUSD carries, plus confidential mint and burn and permissioned burn). A code that no version maps is still reported as unrecognized with its numeric value, not dropped, so a brand-new extension shows up rather than disappearing.
+The inspector names every extension in the canonical Token-2022 interface (codes 0 to 28, with PermissionedBurn=28 the newest defined), including codes the published `@solana/spl-token` enum does not yet name (for example the confidential transfer fee, code 16, which PYUSD carries, plus confidential mint and burn=24, permissioned burn=28, and the account-level confidential transfer account=5). A code that no version maps is still reported as unrecognized with its numeric value, not dropped, so a brand-new extension shows up rather than disappearing.
 
 ## CLI
 

@@ -1,6 +1,6 @@
 # mint-inspector
 
-A read-only tool that decodes a Solana mint or token account from on-chain data: its Token-2022 extensions and, for a mint, the wallet, DEX, and CEX integration risks. For a token account it reports the balance, frozen state, withheld fees, and account extensions. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
+A read-only tool that decodes a Solana mint or token account from on-chain data: its Token-2022 extensions and, for a mint, the wallet, DEX, and CEX integration risks. For a token account it reports the balance, frozen state, withheld fees, and account extensions. Severity is **conditional on authority liveness**: a fund-loss-grade extension scores high only while its controlling authority is live (a renounced permanent delegate, or a locked fee rate, is far lower risk), mirroring how integrators such as Jupiter triage a token. It emits a 0-to-100 risk score, a verdict tier, and a concrete `fix:` per finding. It ships as a CLI and an MCP server over the same tested core. It never signs or sends a transaction: it reads one account.
 
 ![Inspecting the PayPal USD (PYUSD) mint](demo.gif)
 
@@ -33,26 +33,23 @@ Token-2022 mint inspection
   Decimals:         6
   ...
 Extensions (8):
-  - Mint Close Authority [mint-close-authority]
-  - Permanent Delegate [permanent-delegate]
-  - Transfer Fee [transfer-fee]
-      basisPoints: 0
-  - Confidential Transfer [confidential-transfer]
-  - Confidential Transfer Fee [confidential-transfer-fee]
-  - Transfer Hook [transfer-hook]
-      programId: none
-  - Metadata Pointer [metadata-pointer]
-  - Token Metadata [token-metadata]
-      name: PayPal USD
-      symbol: PYUSD
-  ...
-Conflicts (1):
-  [LOW] Confidential Transfer with Transfer Hook: the hook sees no real amount on confidential transfers
+  - Mint Close Authority, Permanent Delegate, Transfer Fee, Confidential Transfer,
+    Confidential Transfer Fee, Transfer Hook (programId: none), Metadata Pointer, Token Metadata
+
+Verdict: CRITICAL (risk score 100/100)
+Integration findings (10):
+  [CRITICAL] Permanent delegate can seize or burn any balance (wallet, dex, cex)
+      fix: Renounce the permanent delegate unless seizure is an intended, disclosed feature.
+  [HIGH]     Confidential transfer extension present (disabled on mainnet, #657)
+  [MEDIUM]   Transfer fee is withheld on receive (live fee authority can raise the rate)
+  [MEDIUM]   Transfer hook present but no program set (latent caveat, not an active block)
+  [MEDIUM]   Freeze authority is live (accounts can be frozen)
+  [LOW]      Mint close authority; [LOW] Mint authority is live; [INFO] x3
 Posture:
-  CEX listing blockers:  permanent-delegate, confidential-transfer, transfer-hook
+  CEX listing blockers:  permanent-delegate, confidential-transfer
 ```
 
-(Output trimmed. The inspector names all eight extensions, including the confidential transfer fee that PYUSD carries, code 16, which the published `@solana/spl-token` enum does not yet map. The confidential-transfer-with-hook line is a low caveat, not an incompatibility: PYUSD runs both on mainnet, and the hook simply receives no real amount on a confidential transfer.)
+(Output trimmed; see [DEMO.md](DEMO.md) for the full report.) PYUSD scores **CRITICAL** because its permanent delegate is live. Its transfer-hook extension has no program set, so it is a medium latent caveat and **not** a hard CEX blocker (an active hook, like the WNS NFT fixture, is). The inspector names all eight extensions, including the confidential transfer fee (code 16) the published `@solana/spl-token` enum does not map. Renounce the permanent delegate and the verdict drops, exactly the live-vs-renounced distinction the engine makes visible.
 
 ## MCP server
 
@@ -73,7 +70,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**38 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions; the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**43 tests, offline and deterministic.** The risk engine and the compatibility checker are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high) and the 0-to-100 score; the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handler is tested with an injected fetcher. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
 
 ## Dependency advisories
 

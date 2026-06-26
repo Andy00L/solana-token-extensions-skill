@@ -7,8 +7,10 @@ The token cannot be transferred. Burning is still allowed. The ATA pairs it with
 - `createInitializeNonTransferableMintInstruction(mint, TOKEN_2022_PROGRAM_ID)` before `InitializeMint`.
 
 ## Permanent Delegate
-A fixed authority that can transfer or burn tokens from any account of the mint. Used for regulated assets and clawback. It is a strong power and a trust assumption for every holder and integrator.
+A fixed authority that can transfer or burn tokens from any account of the mint. Account owners cannot revoke it, and it survives a renounced mint and freeze authority and locked liquidity, so it is the marquee fund-loss extension: a live permanent delegate means full trust in the mint's controllers. Used for regulated assets and clawback.
+- The risk is the live authority. A renounced (null) permanent delegate is inert; the mint inspector scores it accordingly. Renounce it unless seizure is an intended, disclosed feature.
 - Does not reach tokens held in a confidential balance. Pair with default-frozen accounts if you rely on it for compliance.
+- Source: Neodyme Token-2022 review (https://neodyme.io/en/blog/token-2022/), "if there is a permanent delegate present, ensure you trust the authorities controlling the mint."
 
 ## Default Account State
 New token accounts start in a chosen state, typically Frozen, for allowlist or KYC gating. A freeze authority thaws an account after approval.

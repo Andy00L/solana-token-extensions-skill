@@ -13,9 +13,10 @@ describe("extension catalog", () => {
     // ExtensionType.TransferFeeConfig = 1, TransferHook = 14.
     expect(lookupExtension(1)?.id).toBe("transfer-fee");
     expect(lookupExtension(14)?.id).toBe("transfer-hook");
-    // Account-level: TransferFeeAmount = 2, ImmutableOwner = 7.
+    // Account-level: TransferFeeAmount = 2, ImmutableOwner = 7, ConfidentialTransferAccount = 5.
     expect(lookupExtension(2)?.id).toBe("transfer-fee-amount");
     expect(lookupExtension(7)?.id).toBe("immutable-owner");
+    expect(lookupExtension(5)?.id).toBe("confidential-transfer-account");
   });
 
   it("returns null for a code no version maps, so the decoder can mark it unrecognized", () => {
