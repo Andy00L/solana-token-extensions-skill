@@ -48,7 +48,7 @@ The base program rejects these mints with `InvalidExtensionCombination`, so a va
 6. Send steps 2 through 4 in a single transaction. Step 5 can be in the same or a following transaction.
 
 ## What changed in 2025 and 2026 (read before quoting older guides)
-- Confidential transfers and the ZK ElGamal Proof Program are disabled on mainnet (disabled June 2025, still disabled as of June 2026, tracking issue solana-program/token-2022 #657). Do not present confidential-transfer code as live. See [confidential-transfer.md](confidential-transfer.md).
+- Confidential transfers and the ZK ElGamal Proof Program were re-enabled on mainnet on 2026-06-04 (the program is executable again), ending the disablement that ran from 2025-06-19 (tracking issue solana-program/token-2022 #657). Treat confidential-transfer code as live but handle with care: narrow tooling support and a compliance review for opaque balances. See [confidential-transfer.md](confidential-transfer.md).
 - `solana-bankrun` is deprecated in favor of LiteSVM. A guide that recommends bankrun is stale.
 - `@solana/web3.js` 2.x was renamed `@solana/kit` (v6 line). The v1 line continues under `@solana/spl-token`.
 - Anchor reached 1.0 in April 2026. Pin to 1.0.x or use native Rust.

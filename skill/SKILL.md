@@ -1,6 +1,6 @@
 ---
 name: solana-token-extensions
-description: Solana Token-2022 (Token Extensions) mastery. Extends solana-dev-skill with extension-specific guidance: transfer fee, transfer hook and ExtraAccountMetaList, confidential transfer status, metadata pointer and token metadata, group and member pointer, non-transferable, interest-bearing, scaled UI amount, permanent delegate, default account state, immutable owner, CPI guard, required memo, mint close authority, pausable, plus a compatibility matrix, SPL-to-Token-2022 migration, wallet and DEX integration, and transfer-hook security auditing. For core program development (Anchor, Pinocchio, IDL codegen, base testing and security), delegates to core solana-dev skill.
+description: Solana Token-2022 (Token Extensions) mastery. Use when a task involves Token-2022 or Token Extensions: choosing or combining extensions, building or scaffolding a mint, inspecting or auditing a live mint, harvesting transfer fees, or wallet, DEX, and CEX integration. Extends solana-dev-skill with extension-specific guidance: transfer fee, transfer hook and ExtraAccountMetaList, confidential transfer status, metadata pointer and token metadata, group and member pointer, non-transferable, interest-bearing, scaled UI amount, permanent delegate, default account state, immutable owner, CPI guard, required memo, mint close authority, pausable, plus a compatibility matrix, SPL-to-Token-2022 migration, wallet and DEX integration, and transfer-hook security auditing. For core program development (Anchor, Pinocchio, IDL codegen, base testing and security), delegates to core solana-dev skill.
 user-invocable: true
 ---
 
@@ -45,7 +45,7 @@ Use this skill to choose, build, integrate, and audit Token-2022 mints. It owns 
 1. Program: SPL Token-2022, program id `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`. Prefer the anchor-spl `token_interface` so code works for both SPL Token and Token-2022 mints.
 2. Client: `@solana/kit` for transactions and codecs, `@solana/spl-token` for extension instruction builders. Unpack mint extensions with the typed helpers, never raw bytes.
 3. Testing: LiteSVM and Mollusk for extension behavior (fees withheld, hook invoked, paused transfer rejected). See core [testing.md](../solana-dev/testing.md) for harness setup. `solana-bankrun` is deprecated; do not use it.
-4. Privacy: confidential transfers have been disabled on mainnet since June 2025 and remain disabled as of mid-2026, re-enablement pending (issue #657 open; see [confidential-transfer.md](confidential-transfer.md)). Do not ship confidential-transfer code as production ready.
+4. Privacy: confidential transfers were re-enabled on mainnet on 2026-06-04 (the ZK ElGamal Proof Program is executable again; see [confidential-transfer.md](confidential-transfer.md)). Treat them as live but handle with care: wallet, DEX, and CEX support is narrow and opaque balances invite a compliance review. Verify end to end before relying on them.
 5. Defaults: pick the smallest extension set that meets the requirement. Errors as values in client code, no type suppression.
 
 ## Operating Procedure
@@ -109,7 +109,7 @@ Extension families:
 Operate and integrate:
 - [migration.md](migration.md): SPL Token to Token-2022
 - [integration-compatibility.md](integration-compatibility.md): wallet, DEX, explorer, CEX support
-- [mint-inspector.md](mint-inspector.md): decode a live mint and assess its integration risk, with a renounce-to-remediate path and batch triage (CLI and three MCP tools)
+- [mint-inspector.md](mint-inspector.md): decode a live mint and assess its integration risk, with a renounce-to-remediate path and batch triage (CLI and four MCP tools)
 - [client-codegen.md](client-codegen.md): TypeScript and Rust client patterns
 - [testing.md](testing.md): extension behavior tests with LiteSVM and Mollusk
 
@@ -194,6 +194,6 @@ Reference:
 This skill ships tested reference code under `examples/` in the source repository:
 - `examples/ts-multi-extension-mint`: a Token-2022 mint that combines transfer fee, metadata pointer, token metadata, and interest-bearing, with LiteSVM tests that run offline.
 - `examples/transfer-hook-allowlist`: a native Rust transfer-hook program with a fail-closed allowlist and a LiteSVM integration test.
-- `examples/mint-inspector`: the read-only mint inspector behind [mint-inspector.md](mint-inspector.md), a CLI and three MCP tools (`inspect_mint`, `inspect_many`, `check_extension_compatibility`) with offline tests. See that file for usage.
+- `examples/mint-inspector`: the read-only mint inspector behind [mint-inspector.md](mint-inspector.md), a CLI and four MCP tools (`inspect_mint`, `inspect_many`, `check_extension_compatibility`, `scaffold_mint`) with offline tests. See that file for usage.
 
 Run `make verify` in `examples/` to build and test all three.

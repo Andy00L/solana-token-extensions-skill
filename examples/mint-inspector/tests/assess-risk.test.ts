@@ -25,11 +25,14 @@ describe("assessExtensions", () => {
     expect(conflict.title.toLowerCase()).toContain("logically incompatible");
   });
 
-  it("treats confidential transfer as a high-severity CEX blocker", () => {
+  it("treats confidential transfer as a medium integration and compliance constraint, not a hard CEX blocker", () => {
     const assessment = assessExtensions(["confidential-transfer"]);
 
-    expect(assessment.findings[0].severity).toBe("high");
-    expect(assessment.posture.cexBlockers).toContain("confidential-transfer");
+    // Re-enabled on mainnet 2026-06-04; the risk is narrow tooling support and CEX
+    // balance opacity (AML), not fund loss, so it is friction rather than a blocker.
+    expect(assessment.findings[0].severity).toBe("medium");
+    expect(assessment.posture.cexBlockers).not.toContain("confidential-transfer");
+    expect(assessment.posture.dexFrictions).toContain("confidential-transfer");
   });
 
   it("returns an informational posture for a metadata-only mint", () => {
@@ -72,12 +75,12 @@ describe("assessExtensions", () => {
     expect(assessment.posture.overallSeverity).toBe("high");
   });
 
-  it("surfaces a low cex finding for the permissioned-burn extension", () => {
+  it("treats permissioned-burn as a high CEX blocker (an authority can destroy holder balances)", () => {
     const assessment = assessExtensions(["permissioned-burn"]);
 
     expect(assessment.findings).toHaveLength(1);
-    expect(assessment.findings[0].severity).toBe("low");
-    expect(assessment.posture.cexBlockers).toHaveLength(0);
+    expect(assessment.findings[0].severity).toBe("high");
+    expect(assessment.posture.cexBlockers).toContain("permissioned-burn");
   });
 
   it("downgrades a permanent delegate to low when its delegate authority is renounced", () => {
@@ -106,6 +109,32 @@ describe("assessExtensions", () => {
     expect(live.findings[0].severity).toBe("medium");
     const locked = assessExtensions([{ id: "transfer-fee", authorityRenounced: true }]);
     expect(locked.findings[0].severity).toBe("low");
+  });
+
+  it("escalates a near-100% transfer fee to a critical CEX blocker even when the authority is renounced", () => {
+    const honeypot = assessExtensions([
+      { id: "transfer-fee", authorityRenounced: true, transferFee: { activeBasisPoints: 10000, scheduledBasisPoints: null } },
+    ]);
+    // A locked 100% fee is a permanent honeypot: renouncing the authority does not help.
+    expect(honeypot.findings[0].severity).toBe("critical");
+    expect(honeypot.posture.cexBlockers).toContain("transfer-fee");
+  });
+
+  it("keeps a small transfer fee at medium friction, not a blocker, when the authority is live", () => {
+    const small = assessExtensions([
+      { id: "transfer-fee", authorityRenounced: false, transferFee: { activeBasisPoints: 50, scheduledBasisPoints: null } },
+    ]);
+    expect(small.findings[0].severity).toBe("medium");
+    expect(small.posture.cexBlockers).not.toContain("transfer-fee");
+    expect(small.posture.dexFrictions).toContain("transfer-fee");
+  });
+
+  it("escalates and annotates a scheduled transfer-fee increase", () => {
+    const scheduled = assessExtensions([
+      { id: "transfer-fee", authorityRenounced: false, transferFee: { activeBasisPoints: 100, scheduledBasisPoints: 9000 } },
+    ]);
+    expect(scheduled.findings[0].severity).toBe("critical");
+    expect(scheduled.findings[0].detail.toLowerCase()).toContain("scheduled");
   });
 
   it("gives every finding a concrete remediation and a 0-to-100 risk score", () => {

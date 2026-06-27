@@ -5,7 +5,7 @@
  * extension set for conflicts and integration posture before writing any mint
  * code. Pure and deterministic: no IO.
  */
-import { type Assessment, assessExtensions } from "./assess-risk";
+import { type Assessment, type Severity, assessExtensions } from "./assess-risk";
 import { catalogEntries } from "./extension-catalog";
 import { formatAssessmentLines } from "./inspect";
 
@@ -47,6 +47,33 @@ export function checkCompatibility(input: CompatibilityInput): CompatibilityResu
   // Only recognized ids drive the assessment; unrecognized ones are reported back
   // so the caller can correct a typo rather than getting a silently wrong posture.
   return { requested, recognized, unrecognized, assessment: assessExtensions(recognized) };
+}
+
+// A compact, agent-consumable projection of a compatibility check, emitted as MCP
+// structuredContent so an agent can branch on the verdict before writing mint code.
+export type CompatibilitySummary = {
+  recognized: string[];
+  unrecognized: string[];
+  severity: Severity;
+  score: number;
+  cexBlockers: string[];
+  conflicts: Array<{ extensions: string[]; severity: Severity; title: string }>;
+};
+
+/** Project a compatibility result to its compact, agent-consumable summary. */
+export function compatibilitySummary(result: CompatibilityResult): CompatibilitySummary {
+  return {
+    recognized: result.recognized,
+    unrecognized: result.unrecognized,
+    severity: result.assessment.posture.overallSeverity,
+    score: result.assessment.posture.score,
+    cexBlockers: result.assessment.posture.cexBlockers,
+    conflicts: result.assessment.conflicts.map((conflict) => ({
+      extensions: conflict.extensions,
+      severity: conflict.severity,
+      title: conflict.title,
+    })),
+  };
 }
 
 /** Render a compatibility check as an aligned plain-text report. */

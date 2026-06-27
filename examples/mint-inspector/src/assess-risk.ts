@@ -38,6 +38,10 @@ export type Conflict = {
   title: string;
   detail: string;
   sourceRef: string;
+  // True when the runtime rejects this combination at initialization
+  // (TokenError::InvalidExtensionCombination), so a generator must refuse to scaffold
+  // it. Absent for logical-smell pairs the program still lets you initialize.
+  initRejected?: boolean;
 };
 
 export type Posture = {
@@ -59,9 +63,21 @@ export type Assessment = {
 // A present extension plus whether its controlling authority is renounced. When
 // authorityRenounced is undefined (a planned set with no live mint), the authority
 // is treated as live, the conservative default.
+// Magnitude of a transfer fee, used to escalate severity beyond the authority
+// model: a near-100% fee is a sell-blocking honeypot no matter who controls it.
+export type TransferFeeParams = {
+  // The fee in effect now, in basis points (10000 = 100%).
+  activeBasisPoints: number;
+  // A different fee scheduled for a future epoch, if one is pending; otherwise null.
+  scheduledBasisPoints: number | null;
+};
+
 export type AssessedExtension = {
   id: string;
   authorityRenounced?: boolean;
+  // Present for the transfer-fee extension when decoded from a live mint, so the
+  // assessment can weigh the fee size, not just who controls the authority.
+  transferFee?: TransferFeeParams;
 };
 
 // The base mint authorities, known only when inspecting a live mint.
@@ -81,7 +97,7 @@ export type RenounceProjection = {
 };
 
 // A remediation path: the current posture, the projection for each renounceable
-// live authority (highest-leverage first), and the posture if all were renounced.
+// live authority (biggest reduction first), and the posture if all were renounced.
 export type Remediation = {
   currentSeverity: Severity;
   currentScore: number;
@@ -154,18 +170,18 @@ const RISK_RULES: Record<string, RiskRule> = {
     },
   },
   "confidential-transfer": {
-    severity: "high",
+    severity: "medium",
     surfaces: ["wallet", "dex", "cex"],
-    cexImpact: "blocker",
+    cexImpact: "friction",
     title: "Confidential transfer extension present",
     detail:
-      "Confidential transfers and the ZK ElGamal Proof Program have been disabled on mainnet-beta since June 2025 (issue token-2022#657 open). A patched, re-audited runtime reached supermajority stake adoption around April 2026, so re-enablement is pending, not permanent. Tooling support is narrow even where enabled. Do not assume confidential operations work on mainnet today.",
+      "Confidential transfers hide transfer amounts behind ElGamal ciphertext and zero-knowledge proofs. The ZK ElGamal Proof Program they depend on was re-enabled on mainnet-beta on 2026-06-04 (feature gate reenable_zk_elgamal_proof_program, activation slot 424224000), ending the disablement that ran from 2025-06-19 after a proof-soundness bug. Balances are opt-in per holder and not publicly visible, so wallet and DEX support is narrow and a CEX cannot reconcile balances for accounting or AML without the auditor key. Treat it as an integration and compliance constraint, not a fund-loss risk to holders.",
     remediation:
-      "Do not rely on confidential operations on mainnet today; track issue token-2022#657 for re-enablement and re-test wallet and DEX support when it lands.",
+      "Confirm your wallet, DEX, and custody stack support confidential balances before relying on them, and verify end to end on mainnet since tooling is still catching up after re-enablement; for a CEX listing, expect a compliance review of the opaque-balance and auditor-key model.",
     sourceRef: "skill/confidential-transfer.md",
   },
   pausable: {
-    severity: "medium",
+    severity: "high",
     surfaces: ["dex", "cex"],
     cexImpact: "blocker",
     controllingAuthorityKey: "authority",
@@ -317,8 +333,8 @@ const RISK_RULES: Record<string, RiskRule> = {
     surfaces: [],
     title: "Confidential transfer fee configured",
     detail:
-      "Holds the fee config for confidential transfers. It only takes effect when confidential transfers run, which they do not on mainnet today (disabled since June 2025, issue token-2022#657). It appears alongside the confidential transfer extension on mints like PYUSD.",
-    remediation: "No action needed today; it activates only if confidential transfers are re-enabled on mainnet.",
+      "Holds the fee config applied when a transfer fee is collected on a confidential transfer. It appears alongside the confidential transfer extension on mints like PYUSD. The ZK ElGamal Proof Program these operations depend on was re-enabled on mainnet on 2026-06-04.",
+    remediation: "No action needed; it applies only to confidential transfers, whose proof program was re-enabled on mainnet on 2026-06-04.",
     sourceRef: "skill/confidential-transfer.md",
   },
   "confidential-mint-burn": {
@@ -326,17 +342,18 @@ const RISK_RULES: Record<string, RiskRule> = {
     surfaces: [],
     title: "Confidential mint and burn configured",
     detail:
-      "Supports minting and burning against confidential balances. Like other confidential operations it depends on the ZK ElGamal Proof Program, which is disabled on mainnet today (issue token-2022#657).",
-    remediation: "No action needed today; it activates only if confidential operations are re-enabled on mainnet.",
+      "Supports minting and burning against confidential balances. Like other confidential operations it depends on the ZK ElGamal Proof Program, re-enabled on mainnet on 2026-06-04 (issue token-2022#657).",
+    remediation: "No action needed; confidential mint and burn depend on the ZK ElGamal Proof Program, re-enabled on mainnet on 2026-06-04.",
     sourceRef: "skill/confidential-transfer.md",
   },
   "permissioned-burn": {
-    severity: "low",
-    surfaces: ["cex"],
-    title: "Permissioned burn restricts who can burn",
+    severity: "high",
+    surfaces: ["wallet", "dex", "cex"],
+    cexImpact: "blocker",
+    title: "Permissioned burn lets an authority destroy holder balances",
     detail:
-      "A newer Token-2022 extension (interface code 28, the highest defined) that gates burning behind a designated authority rather than the token holder. Confirm who holds that authority and that your wallet, explorer, and custody tooling recognize the extension before relying on it.",
-    remediation: "Confirm who holds the burn authority and that your tooling recognizes the extension before listing or custody.",
+      "A newer Token-2022 extension (interface code 28, the highest defined) that gates burning behind a designated authority rather than the token holder, so that authority can burn tokens out of any holder's account. It is a constrained permanent delegate: it can destroy balances but not move them. Confirm who holds the burn authority, and that wallet, explorer, and custody tooling recognize the extension, before relying on it.",
+    remediation: "Confirm who holds the burn authority and treat it as a custody trust concern; integrators and exchanges should account for balances being burnable by that authority.",
     sourceRef: "skill/supply-controls.md",
   },
   unrecognized: {
@@ -392,18 +409,99 @@ const CONFLICT_RULES: ConflictRule[] = [
       "The two are compatible and coexist on a mint (PYUSD carries both). The hook fires on every transfer, but on a confidential transfer Token-2022 passes the hook u64::MAX rather than the cleartext amount, so any hook rule that depends on the amount applies only to regular transfers, not confidential ones.",
     sourceRef: "skill/compatibility-matrix.md",
   },
+];
+
+// Mint extension combinations the Token-2022 runtime rejects at initialization with
+// TokenError::InvalidExtensionCombination. For a decoded live mint these are
+// effectively impossible (the mint could not have been created), so seeing one means
+// a malformed or non-standard layout; for a planned set (the compatibility checker)
+// they are exactly the build-time errors to catch. Each rule states the positive
+// implication: what a valid configuration must include.
+// Source: interface/src/extension/mod.rs check_for_invalid_mint_extension_combinations.
+type CombinationRule = {
+  // The extensions whose simultaneous presence triggers the check.
+  ifAll: string[];
+  // requireAll: every id here must also be present, or the combination is rejected.
+  requireAll?: string[];
+  // mutuallyExclusive: the ifAll set may not appear together at all.
+  mutuallyExclusive?: true;
+  severity: Severity;
+  title: string;
+  detail: string;
+  sourceRef: string;
+};
+
+const COMBINATION_RULES: CombinationRule[] = [
   {
-    // Runtime-enforced: check_for_invalid_mint_extension_combinations rejects this
-    // pair because both rewrite the displayed amount.
-    // Source: interface/src/extension/mod.rs (check_for_invalid_mint_extension_combinations).
-    pair: ["scaled-ui-amount", "interest-bearing"],
+    ifAll: ["scaled-ui-amount", "interest-bearing"],
+    mutuallyExclusive: true,
     severity: "high",
     title: "Scaled UI Amount with Interest-Bearing is rejected at init",
     detail:
       "Both extensions rewrite the displayed amount, so Token-2022 rejects a mint that declares both with InvalidExtensionCombination. Choose one display model: a fixed multiplier (Scaled UI Amount) or an accruing rate (Interest-Bearing).",
     sourceRef: "skill/compatibility-matrix.md",
   },
+  {
+    ifAll: ["confidential-transfer-fee"],
+    requireAll: ["transfer-fee", "confidential-transfer"],
+    severity: "high",
+    title: "Confidential Transfer Fee requires Transfer Fee and Confidential Transfer",
+    detail:
+      "The confidential-transfer-fee config is only valid on a mint that also carries both the transfer-fee and confidential-transfer extensions; Token-2022 rejects it otherwise (InvalidExtensionCombination). Add both, or drop the confidential transfer fee.",
+    sourceRef: "skill/compatibility-matrix.md",
+  },
+  {
+    ifAll: ["transfer-fee", "confidential-transfer"],
+    requireAll: ["confidential-transfer-fee"],
+    severity: "high",
+    title: "Transfer Fee with Confidential Transfer requires the Confidential Transfer Fee config",
+    detail:
+      "A mint that combines a transfer fee with confidential transfers must also carry the confidential-transfer-fee config so fees can be collected on confidential transfers; Token-2022 rejects the pair without it. A mint showing this pair without the confidential transfer fee (PYUSD carries all three) is a non-standard or malformed layout.",
+    sourceRef: "skill/compatibility-matrix.md",
+  },
+  {
+    ifAll: ["confidential-mint-burn"],
+    requireAll: ["confidential-transfer"],
+    severity: "high",
+    title: "Confidential Mint and Burn requires Confidential Transfer",
+    detail:
+      "Confidential mint and burn operate on confidential balances, so the mint must also enable the confidential-transfer extension; Token-2022 rejects it otherwise (InvalidExtensionCombination).",
+    sourceRef: "skill/compatibility-matrix.md",
+  },
+  {
+    ifAll: ["non-transferable", "confidential-transfer"],
+    requireAll: ["confidential-mint-burn"],
+    severity: "high",
+    title: "Non-Transferable with Confidential Transfer requires Confidential Mint and Burn",
+    detail:
+      "A non-transferable mint that enables confidential transfers must also enable confidential mint and burn, since supply can then move only through mint and burn; Token-2022 rejects the pair without it (InvalidExtensionCombination).",
+    sourceRef: "skill/compatibility-matrix.md",
+  },
 ];
+
+/** Evaluate the runtime-rejected combination rules against a present-extension set. */
+function combinationConflicts(present: Set<string>): Conflict[] {
+  const conflicts: Conflict[] = [];
+  for (const rule of COMBINATION_RULES) {
+    if (!rule.ifAll.every((id) => present.has(id))) {
+      continue;
+    }
+    const violated =
+      rule.mutuallyExclusive === true ? true : (rule.requireAll ?? []).some((id) => !present.has(id));
+    if (!violated) {
+      continue;
+    }
+    conflicts.push({
+      extensions: rule.ifAll,
+      severity: rule.severity,
+      title: rule.title,
+      detail: rule.detail,
+      sourceRef: rule.sourceRef,
+      initRejected: true,
+    });
+  }
+  return conflicts;
+}
 
 const SEVERITY_RANK: Record<Severity, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
@@ -428,6 +526,65 @@ function scoreOf(severities: Severity[]): number {
   return Math.min(100, total);
 }
 
+// Transfer-fee magnitude thresholds (basis points; the program cap
+// MAX_FEE_BASIS_POINTS is 10000 = 100%). A fee that takes most of every transfer
+// makes the token effectively untradeable no matter who holds the authority, so the
+// magnitude escalates severity on its own. These cut points are heuristics.
+// Source: spl-token-2022 transfer_fee MAX_FEE_BASIS_POINTS = 10000.
+const HONEYPOT_FEE_BASIS_POINTS = 9000; // >= 90%: a sell-blocking honeypot
+const SEVERE_FEE_BASIS_POINTS = 5000; // >= 50%: a severe value drag
+
+/** Severity implied by a fee size alone, ignoring the authority. */
+function feeMagnitudeSeverity(basisPoints: number): Severity {
+  if (basisPoints >= HONEYPOT_FEE_BASIS_POINTS) {
+    return "critical";
+  }
+  if (basisPoints >= SEVERE_FEE_BASIS_POINTS) {
+    return "high";
+  }
+  return "info";
+}
+
+/**
+ * Build the transfer-fee finding with magnitude awareness. The authority-based
+ * severity (a live fee-config authority can raise the rate; a renounced one locks
+ * it) is escalated by the active and any scheduled fee size, because a near-100%
+ * fee is a sell-blocking honeypot even when the rate is locked.
+ */
+function buildTransferFeeFinding(extension: AssessedExtension, rule: RiskRule, fee: TransferFeeParams): Finding {
+  const isRenounced = extension.authorityRenounced === true && rule.renounced !== undefined;
+  const override = isRenounced ? rule.renounced : undefined;
+  const baseSeverity = override ? override.severity : rule.severity;
+  const scheduled = fee.scheduledBasisPoints;
+  const severity = maxSeverity([
+    baseSeverity,
+    feeMagnitudeSeverity(fee.activeBasisPoints),
+    scheduled === null ? "info" : feeMagnitudeSeverity(scheduled),
+  ]);
+
+  const notes: string[] = [];
+  if (feeMagnitudeSeverity(fee.activeBasisPoints) !== "info") {
+    notes.push(
+      `The active fee is ${fee.activeBasisPoints} bps (${(fee.activeBasisPoints / 100).toFixed(2)}%), high enough to make the token hard or impossible to sell; this holds whether or not the fee-config authority is renounced, since the rate is already set this high.`,
+    );
+  }
+  if (scheduled !== null) {
+    notes.push(
+      `A fee change to ${scheduled} bps (${(scheduled / 100).toFixed(2)}%) is scheduled for a future epoch; treat the higher of the current and scheduled rate as the effective risk.`,
+    );
+  }
+  const detail = override ? override.detail : rule.detail;
+  return {
+    extension: extension.id,
+    severity,
+    surfaces: rule.surfaces,
+    title: rule.title,
+    detail: notes.length === 0 ? detail : `${detail} ${notes.join(" ")}`,
+    remediation: override ? override.remediation : rule.remediation,
+    sourceRef: rule.sourceRef,
+  };
+}
+
 /**
  * Assess a set of extensions into findings, conflicts, and an overall posture.
  * Accepts plain ids (planned set, authorities assumed live) or AssessedExtension
@@ -447,6 +604,12 @@ export function assessExtensions(
   for (const extension of normalized) {
     const rule = RISK_RULES[extension.id];
     if (rule === undefined) {
+      continue;
+    }
+    // The transfer fee weighs its size (a near-100% fee is a honeypot), not just
+    // the authority, so it has its own builder when fee params are known.
+    if (extension.id === "transfer-fee" && extension.transferFee !== undefined) {
+      findings.push(buildTransferFeeFinding(extension, rule, extension.transferFee));
       continue;
     }
     const isRenounced = extension.authorityRenounced === true && rule.renounced !== undefined;
@@ -481,6 +644,7 @@ export function assessExtensions(
       });
     }
   }
+  conflicts.push(...combinationConflicts(present));
 
   return { findings, conflicts, posture: computePosture(findings, conflicts) };
 }
@@ -591,20 +755,25 @@ function baseAuthorityFindings(authorities: MintAuthorityLiveness): Finding[] {
   return findings;
 }
 
+/** Whether a finding disqualifies (or would disqualify) a CEX listing. */
+function isCexBlocker(finding: Finding): boolean {
+  const rule = RISK_RULES[finding.extension];
+  if (rule === undefined) {
+    return false;
+  }
+  // A transfer fee escalated to high or critical by its own magnitude blocks a
+  // listing even though a normal fee is only friction: a near-100% fee makes the
+  // token effectively untradeable.
+  if (finding.extension === "transfer-fee" && severityRank(finding.severity) >= severityRank("high")) {
+    return true;
+  }
+  // Otherwise a finding blocks only if its rule marks it a blocker and it has not
+  // been downgraded below its live (base) severity by a renounced authority.
+  return rule.cexImpact === "blocker" && severityRank(finding.severity) >= severityRank(rule.severity);
+}
+
 function computePosture(findings: Finding[], conflicts: Conflict[]): Posture {
-  // A finding remains a CEX blocker only if its rule marks it a blocker and its
-  // effective severity is still medium or higher (a renounced authority that
-  // downgrades it to low or info no longer blocks).
-  const cexBlockers = dedupe(
-    findings
-      .filter((finding) => {
-        const rule = RISK_RULES[finding.extension];
-        // A blocker counts only at its live (base) severity. A renounced authority
-        // downgrades the finding, so the dormant power no longer blocks a listing.
-        return rule?.cexImpact === "blocker" && finding.severity === rule.severity;
-      })
-      .map((finding) => finding.extension),
-  );
+  const cexBlockers = dedupe(findings.filter(isCexBlocker).map((finding) => finding.extension));
   const dexFrictions = dedupe(findings.filter((finding) => finding.surfaces.includes("dex")).map((finding) => finding.extension));
   const walletCaveats = dedupe(findings.filter((finding) => finding.surfaces.includes("wallet")).map((finding) => finding.extension));
 
@@ -687,8 +856,8 @@ const ACCOUNT_NOTES: Record<string, Omit<Finding, "extension">> = {
     severity: "info",
     surfaces: [],
     title: "Confidential transfer account state",
-    detail: "Holds this account's confidential-transfer balances and keys. Confidential operations are disabled on mainnet today (issue token-2022#657), so this state is dormant there.",
-    remediation: "No action needed today; confidential operations are disabled on mainnet.",
+    detail: "Holds this account's confidential-transfer balances and keys. Confidential operations were re-enabled on mainnet on 2026-06-04 (issue token-2022#657); support across wallets and venues is still narrow.",
+    remediation: "No action needed; confidential operations are enabled on mainnet again (since 2026-06-04), though tooling support is still narrow.",
     sourceRef: "skill/confidential-transfer.md",
   },
   "pausable-account": {

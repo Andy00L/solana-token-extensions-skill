@@ -33,6 +33,20 @@ export async function fetchMintAccount(addressInput: string, rpcUrl: string): Pr
   }
 }
 
+/**
+ * Fetch the current epoch number, or null if the RPC call fails. Callers then decode
+ * without epoch-aware active-fee resolution (the newer fee is used as the fallback).
+ */
+export async function fetchCurrentEpoch(rpcUrl: string): Promise<number | null> {
+  try {
+    const connection = new Connection(rpcUrl, "confirmed");
+    const epochInfo = await connection.getEpochInfo("confirmed");
+    return epochInfo.epoch;
+  } catch {
+    return null;
+  }
+}
+
 /** A human-readable fetch error message. */
 export function formatFetchError(reason: FetchError): string {
   switch (reason.kind) {

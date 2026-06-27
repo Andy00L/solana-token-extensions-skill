@@ -48,17 +48,18 @@ Integration findings (10):
       account owners cannot revoke it. This is the marquee fund-loss extension.
       fix: Renounce the permanent delegate (set it to none) unless seizure is an intended, disclosed feature.
       source: skill/supply-controls.md, skill/integration-compatibility.md
-  [HIGH] Confidential transfer extension present (wallet, dex, cex)
-      Disabled on mainnet-beta since June 2025 (issue token-2022#657 open); a patched, re-audited
-      runtime reached supermajority stake adoption around April 2026, so re-enablement is pending.
-      fix: Do not rely on confidential operations on mainnet today; track issue token-2022#657.
-      source: skill/confidential-transfer.md
   [MEDIUM] Transfer fee is withheld on receive (dex, cex)
       A live fee-config authority can raise the rate (subject to a roughly two-epoch delay and the
       maximum-fee cap); Jupiter excludes such tokens from Limit and Recurring orders while allowing
-      Instant swaps.
+      Instant swaps. The active fee here is 0 bps (a near-100% fee would escalate to critical).
       fix: Use the net received amount; renounce the fee-config authority to lock the rate.
       source: skill/transfer-fee.md, skill/integration-compatibility.md
+  [MEDIUM] Confidential transfer extension present (wallet, dex, cex)
+      Re-enabled on mainnet-beta on 2026-06-04 (gate reenable_zk_elgamal_proof_program), ending the
+      disablement that ran from 2025-06-19. Balances are opaque, so wallet and DEX support is narrow
+      and a CEX cannot reconcile them without the auditor key: an integration and compliance constraint.
+      fix: Confirm wallet, DEX, and custody support before relying on confidential balances; expect a CEX compliance review.
+      source: skill/confidential-transfer.md
   [MEDIUM] Transfer hook runs on every transfer (wallet, dex, cex)
       The transfer-hook extension is present but no hook program is set, so transfers run normally
       today; the hook authority can set one at any time. A latent caveat, not an active block.
@@ -80,23 +81,23 @@ Conflicts (1):
       confidential transfer Token-2022 passes the hook u64::MAX rather than the cleartext amount.
 
 Posture:
-  CEX listing blockers:  permanent-delegate, confidential-transfer
-  DEX routing frictions: permanent-delegate, confidential-transfer, transfer-fee, transfer-hook
+  CEX listing blockers:  permanent-delegate
+  DEX routing frictions: permanent-delegate, transfer-fee, confidential-transfer, transfer-hook
   Wallet caveats:        permanent-delegate, confidential-transfer, transfer-hook, freeze-authority
 
 Remediation path (renounce a live authority to lower risk):
   current: CRITICAL (risk score 100/100)
-  renounce permanent-delegate -> HIGH (100/100)
+  renounce permanent-delegate -> MEDIUM (80/100)
   renounce freeze-authority -> CRITICAL (100/100)
   renounce mint-authority -> CRITICAL (100/100)
   renounce mint-close-authority -> CRITICAL (100/100)
   renounce transfer-fee -> CRITICAL (100/100)
-  renounce all of the above -> HIGH (65/100)
+  renounce all of the above -> MEDIUM (45/100)
 ```
 
 (Findings below MEDIUM trimmed to their headline for space.) PYUSD scores **CRITICAL** because its permanent delegate is live, the marquee fund-seizure capability. The hook extension carries no program, so it is a medium latent caveat, not a hard listing blocker (contrast with an active hook below). All eight extensions are named, including the confidential transfer fee (code 16) that the published `@solana/spl-token` enum does not map.
 
-The **remediation path** is the headline of the tool: it recomputes the verdict for each authority the issuer could renounce. Renouncing the permanent delegate is the single highest-leverage action (it drops the tier from CRITICAL to HIGH), but PYUSD cannot be made CEX-clean by renouncing authorities alone, the confidential-transfer extension has no renounce path, so even renouncing everything floors the mint at HIGH (65/100). The score is a path, not just a label. (Scores saturate at 100, so the severity tier is the primary signal; the all-renounced line shows the true reduction.)
+The **remediation path** is the headline of the tool: it recomputes the verdict for each authority the issuer could renounce. Renouncing the live permanent delegate is the single highest-impact action: it clears the only hard CEX blocker and drops the tier from CRITICAL to MEDIUM (80/100). The residual is the confidential-transfer extension (re-enabled but narrow support) and the latent transfer hook, which renouncing cannot remove, so even renouncing everything floors the mint at MEDIUM (45/100). The score is a path, not just a label. (Scores saturate at 100, so the severity tier is the primary signal; the all-renounced line shows the true reduction.)
 
 ## 2. Triage a whole listing set in one call (inspect_many)
 
@@ -118,7 +119,7 @@ Token-2022 batch inspection
   By severity:       critical 1, high 1, medium 2, low 0, info 1
 
 Per address (worst first):
-  [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate, confidential-transfer)
+  [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate)
   [HIGH 60/100] 8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook)
   [MEDIUM 25/100] susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X (mint; no CEX blockers)
   [MEDIUM 15/100] CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo (mint; no CEX blockers)
@@ -151,9 +152,10 @@ Verdict: CRITICAL (risk score 100/100)
 Integration findings (6):
   [CRITICAL] Permanent delegate can seize or burn any balance (wallet, dex, cex)
       fix: Renounce the permanent delegate unless seizure is an intended, disclosed feature.
+  [HIGH] Pausable: transfers can be halted (dex, cex)
+      A live pause authority can halt every transfer, mint, and burn mint-wide.
   [MEDIUM] Transfer fee is withheld on receive (dex, cex)
   [MEDIUM] New accounts may be frozen by default (wallet, dex)
-  [MEDIUM] Pausable: transfers can be halted (dex, cex)
   [INFO] Metadata pointer set (informational)
   [INFO] On-chain token metadata (informational)
 
@@ -164,3 +166,37 @@ Posture:
 ```
 
 The design is valid (no conflicts), but the permanent delegate makes it CRITICAL and the pause authority is a second listing blocker. The tool surfaces that, with a concrete fix for each, before a single line of mint code is written.
+
+## 5. Scaffold a correct mint from an extension set (scaffold_mint)
+
+Beyond auditing, the same offline engine generates mint creation code. It vets the set first, refuses any combination the runtime would reject at init, and otherwise emits an init plan and TypeScript with the order and sizing correct (the two footguns). This is the fourth MCP tool an agent can call, also exposed as `--scaffold`.
+
+```
+$ npm run inspect -- --scaffold transfer-fee,metadata-pointer,token-metadata --decimals 6
+
+Token-2022 mint scaffold
+  Extensions:   transfer-fee, metadata-pointer, token-metadata
+  Decimals:     6
+
+Init plan (order is load-bearing):
+  1. [create-account] SystemProgram.createAccount
+       space = getMintLen(fixed extensions); fund rent for space + the token-metadata length
+  2. [before-init-mint] createInitializeTransferFeeConfigInstruction
+  3. [before-init-mint] createInitializeMetadataPointerInstruction
+  4. [init-mint] createInitializeMint2Instruction
+  5. [after-init-mint] createInitializeMetadataInstruction
+
+Scaffold:
+// ... ordered, correctly-sized TypeScript with placeholders to fill ...
+```
+
+An illegal set is refused before any code is generated:
+
+```
+$ npm run inspect -- --scaffold scaled-ui-amount,interest-bearing
+
+Token-2022 mint scaffold: REJECTED
+  The set is rejected by the runtime at initialization (InvalidExtensionCombination):
+    - Scaled UI Amount with Interest-Bearing is rejected at init
+  No code is generated for an illegal set.
+```

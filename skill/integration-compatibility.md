@@ -10,7 +10,7 @@ Token-2022 support varies by surface and by extension. Confirm support before la
 
 ## Extensions that most often cause friction
 - Transfer Hook: every transfer needs extra accounts and a CPI. Integrators must resolve and simulate it. Some venues reject hooks outright.
-- Confidential Transfer: narrow support, and disabled on mainnet as of mid-2026, re-enablement pending (see [confidential-transfer.md](confidential-transfer.md)).
+- Confidential Transfer: re-enabled on mainnet on 2026-06-04, but support across wallets, DEXs, and CEXs is still narrow, and opaque balances invite a compliance review (see [confidential-transfer.md](confidential-transfer.md)).
 - Permanent Delegate and Pausable: a trust and operational concern for custodians and exchanges while their authority is live.
 - Transfer Fee: integrators must use the net received amount and cannot close accounts that still hold withheld fees.
 

@@ -1,69 +1,29 @@
-make verify, captured 2026-06-27.
-All examples build and test offline (no validator, no devnet). 84 checks green.
+VERIFICATION OUTPUT (captured 2026-06-27, make verify)
 
-$ cd examples && make verify
+102 checks total: Rust 22, transfer-hook end-to-end 1, TypeScript 79 (ts-multi-extension-mint 7, mint-inspector 72). A CI-gated live mainnet smoke test runs separately (LIVE_RPC=1).
 
-=== transfer-hook-allowlist (native Rust hook) ===
-cd transfer-hook-allowlist && cargo build-sbf && cargo test
-    Finished `release` profile [optimized] target(s)
-    Finished `test` profile [unoptimized + debuginfo] target(s)
-     Running unittests src/lib.rs
-
+--- transfer-hook-allowlist (cargo build-sbf + cargo test) ---
 running 22 tests
-test error::tests::error_codes_are_stable_documented_values ... ok
-test error::tests::errors_map_to_distinct_codes ... ok
-test processor::tests::add_to_allowlist_discriminator_does_not_collide_with_interface_instructions ... ok
-test processor::tests::add_to_allowlist_is_idempotent_when_allow_account_exists ... ok
-test processor::tests::add_to_allowlist_rejects_a_mint_not_owned_by_token_2022 ... ok
-test processor::tests::add_to_allowlist_rejects_a_mint_with_no_authority ... ok
-test processor::tests::add_to_allowlist_rejects_a_non_authority_signer ... ok
-test processor::tests::add_to_allowlist_rejects_an_unexpected_allow_pda ... ok
-test processor::tests::add_to_allowlist_requires_five_accounts ... ok
-test processor::tests::add_to_allowlist_requires_signer ... ok
-test processor::tests::allow_pda_is_deterministic_and_scoped_to_mint_and_destination ... ok
-test processor::tests::execute_denies_when_not_transferring ... ok
-test processor::tests::execute_rejects_a_mint_sized_source_account ... ok
-test processor::tests::execute_rejects_too_few_accounts ... ok
-test processor::tests::execute_with_five_accounts_is_rejected ... ok
-test processor::tests::initialize_rejects_a_wrong_extra_account_metas_pda ... ok
-test processor::tests::initialize_requires_authority_signer ... ok
-test processor::tests::initialize_requires_four_accounts ... ok
-test processor::tests::process_rejects_empty_input ... ok
-test processor::tests::update_extra_account_meta_list_is_rejected ... ok
-test processor::tests::validation_list_builds_and_initializes ... ok
-test tests::public_constants_are_stable ... ok
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+--- ts-multi-extension-mint (npm test) ---
+      Tests  4 passed (4)
+      Tests  1 passed (1)
+      Tests  2 passed (2)
+[e2e] transfer hook allowlist: blocked then allowed, 1 scenario passed
+[e2e] transfer hook allowlist: blocked then allowed, 1 scenario passed
 
-=== ts-multi-extension-mint (TypeScript + LiteSVM, one file per process) ===
-cd ts-multi-extension-mint && npm ci && npm test
- (tsc --noEmit: ok)
- PASS tests/edge-cases.test.ts            (4 tests)
- PASS tests/initialization-order.test.ts  (1 test)
- PASS tests/multi-extension-mint.test.ts  (2 tests)
- [e2e] transfer hook allowlist: blocked then allowed, 1 scenario passed
- => 7 vitest tests + 1 transfer-hook end-to-end scenario
+--- mint-inspector (npm test) ---
+      Tests  23 passed (23)
+      Tests  6 passed (6)
+      Tests  8 passed (8)
+      Tests  4 passed (4)
+      Tests  6 passed (6)
+      Tests  5 passed (5)
+      Tests  1 skipped (1)
+      Tests  4 passed (4)
+      Tests  16 passed (16)
 
-=== mint-inspector (TypeScript + LiteSVM, one file per process) ===
-cd mint-inspector && npm ci && npm test
- (tsc --noEmit: ok)
- PASS tests/assess-risk.test.ts          (20 tests)
- PASS tests/check-compatibility.test.ts   (5 tests)
- PASS tests/decode-inspect.test.ts        (8 tests)
- PASS tests/extension-catalog.test.ts     (4 tests)
- PASS tests/inspect-many.test.ts          (5 tests)
- PASS tests/mcp-tool.test.ts              (4 tests)
- PASS tests/real-mint-decode.test.ts      (8 tests)
- => 54 tests (conditional severity, renounce remediation, batch triage, 5 captured mainnet mints, a built controls mint, and a token-account decode)
-
-=== Summary ===
-Rust hook:       22 cargo unit tests
-ts-multi mint:    7 LiteSVM tests + 1 transfer-hook e2e scenario
-mint-inspector:  54 offline tests (conditional severity, renounce remediation, batch triage, mints and a token account, 5 captured mainnet mints)
-Total:           84 checks, all green.
-
-Note on the runner: LiteSVM's native addon aborts intermittently (std::bad_alloc)
-inside a vitest worker, never under a plain node process. run-tests.mjs runs each
-test file in its own single-fork process and retries only on a native-crash
-marker (a real assertion failure fails at once), and the BPF-executing e2e
-scenario runs under tsx (npm run e2e), which is stable.
+EXIT: all suites green.

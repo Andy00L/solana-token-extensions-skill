@@ -33,6 +33,45 @@ jobs:
         working-directory: examples/mint-inspector
         run: npm ci && npm test
 
+      - name: Mint inspector (live mainnet smoke, best-effort)
+        working-directory: examples/mint-inspector
+        run: npx vitest run tests/live-smoke.test.ts
+        env:
+          LIVE_RPC: "1"
+        # The public RPC can be rate-limited or down; the test soft-skips on outage,
+        # and this guard means a flaky endpoint never reds the badge.
+        continue-on-error: true
+
       - name: Multi-extension mint (tsc + tests)
         working-directory: examples/ts-multi-extension-mint
         run: npm ci && npm test
+
+  # Best-effort: the transfer-hook end-to-end scenario needs the Solana platform
+  # tools (cargo build-sbf). Marked continue-on-error so a flaky toolchain install
+  # never reds the badge; the authoritative run is local `make verify`, recorded in
+  # examples/VERIFICATION_OUTPUT.txt. Once this job is observed green on main, the
+  # continue-on-error can be removed to make the on-chain e2e a required check.
+  hook-e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Solana platform tools (Agave)
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Confirm cargo build-sbf is available
+        run: cargo build-sbf --version
+
+      - name: Build the hook and run the end-to-end scenario
+        working-directory: examples
+        run: make verify

@@ -10,6 +10,7 @@ import {
   type MintAuthorityLiveness,
   type Remediation,
   type Severity,
+  type TransferFeeParams,
   assessExtensions,
   assessTokenAccount,
   controllingAuthorityKey,
@@ -26,9 +27,13 @@ export type InspectionResult =
   | { status: "ok"; inspection: Inspection }
   | { status: "error"; reason: DecodeError };
 
-/** Decode a mint or token account and assess it in one step. */
-export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buffer> | null): InspectionResult {
-  const decoded = decodeTokenEntity(address, accountInfo);
+/**
+ * Decode a mint or token account and assess it in one step. When currentEpoch is
+ * given, the transfer fee is resolved under the two-epoch activation rule and a
+ * scheduled fee change is surfaced; without it the newer fee is used.
+ */
+export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buffer> | null, currentEpoch?: number): InspectionResult {
+  const decoded = decodeTokenEntity(address, accountInfo, currentEpoch);
   if (decoded.status === "error") {
     return { status: "error", reason: decoded.reason };
   }
@@ -49,7 +54,10 @@ export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buff
   // a classic SPL mint is reported as having no Token-2022 extensions.
   const mintAuthorities: MintAuthorityLiveness | undefined =
     mint.programKind === "token-2022"
-      ? { mintAuthorityLive: mint.mintAuthority !== null, freezeAuthorityLive: mint.freezeAuthority !== null }
+      ? {
+          mintAuthorityLive: isLiveAuthorityKey(mint.mintAuthority),
+          freezeAuthorityLive: isLiveAuthorityKey(mint.freezeAuthority),
+        }
       : undefined;
   const assessment = assessExtensions(assessedExtensions, mintAuthorities);
   const remediation = projectRenouncements(assessedExtensions, mintAuthorities);
@@ -62,6 +70,45 @@ export function inspectionVerdict(inspection: Inspection): { severity: Severity;
     return { severity: inspection.assessment.overallSeverity, score: inspection.assessment.score };
   }
   return { severity: inspection.assessment.posture.overallSeverity, score: inspection.assessment.posture.score };
+}
+
+// A compact, agent-consumable verdict: the fields another agent branches on (is it
+// safe to list, route, or hold) without parsing the full inspection. Emitted as MCP
+// structuredContent so a calling agent gets a typed object, not just prose.
+export type InspectionSummary = {
+  kind: "mint" | "token-account";
+  address: string;
+  severity: Severity;
+  score: number;
+  cexBlockers: string[];
+  dexFrictions: string[];
+  walletCaveats: string[];
+};
+
+/** Project any inspection to its compact, agent-consumable verdict. */
+export function inspectionSummary(inspection: Inspection): InspectionSummary {
+  const verdict = inspectionVerdict(inspection);
+  if (inspection.kind === "mint") {
+    const { posture } = inspection.assessment;
+    return {
+      kind: "mint",
+      address: inspection.mint.address,
+      severity: verdict.severity,
+      score: verdict.score,
+      cexBlockers: posture.cexBlockers,
+      dexFrictions: posture.dexFrictions,
+      walletCaveats: posture.walletCaveats,
+    };
+  }
+  return {
+    kind: "token-account",
+    address: inspection.account.address,
+    severity: verdict.severity,
+    score: verdict.score,
+    cexBlockers: [],
+    dexFrictions: [],
+    walletCaveats: [],
+  };
 }
 
 /** A human-readable message for any fetch or decode error, shared by all callers. */
@@ -80,13 +127,40 @@ export function formatAccountError(reason: FetchError | DecodeError): string {
  * authority is renounced from the decoded detail (an unset authority renders as
  * "none"). This drives conditional severity: a dormant authority is lower risk.
  */
+// The all-zero key (System Program, "111...111") is not a real signer: an authority
+// set to it can never sign, so it is treated as effectively renounced, distinct from
+// a live key. A null is COption::None (cleanly renounced). Extension authorities use
+// the zero key for "no authority" and already decode to "none"; this predicate covers
+// the base mint and freeze authorities, which decode to the raw key.
+// Source: spl-token SetAuthority (None) and OptionalNonZeroPubkey (zero = unset).
+export const SYSTEM_PROGRAM_KEY = "11111111111111111111111111111111";
+
+/** Whether a decoded base authority key is a live signer (not None, not the zero key). */
+export function isLiveAuthorityKey(key: string | null): boolean {
+  return key !== null && key !== SYSTEM_PROGRAM_KEY;
+}
+
 function toAssessedExtension(extension: DecodedExtension): AssessedExtension {
   const key = controllingAuthorityKey(extension.id);
-  if (key === null) {
-    return { id: extension.id };
+  const assessed: AssessedExtension =
+    key === null
+      ? { id: extension.id }
+      : { id: extension.id, authorityRenounced: extension.detail[key] === undefined || extension.detail[key] === "none" };
+  if (extension.id === "transfer-fee") {
+    assessed.transferFee = toTransferFeeParams(extension.detail);
   }
-  const value = extension.detail[key];
-  return { id: extension.id, authorityRenounced: value === undefined || value === "none" };
+  return assessed;
+}
+
+/** Build the transfer-fee magnitude params from the decoded extension detail. */
+function toTransferFeeParams(detail: Record<string, string>): TransferFeeParams {
+  const active = Number.parseInt(detail.basisPoints ?? "0", 10);
+  const scheduledRaw = detail.scheduledBasisPoints;
+  const scheduled = scheduledRaw === undefined ? null : Number.parseInt(scheduledRaw, 10);
+  return {
+    activeBasisPoints: Number.isFinite(active) ? active : 0,
+    scheduledBasisPoints: scheduled !== null && Number.isFinite(scheduled) ? scheduled : null,
+  };
 }
 
 /** A human-readable decode error message. */
@@ -117,8 +191,8 @@ function formatMintReport(mint: DecodedMint, assessment: Assessment, remediation
   lines.push(`  Program:          ${mint.programKind} (${mint.programId})`);
   lines.push(`  Decimals:         ${mint.decimals}`);
   lines.push(`  Supply (raw):     ${mint.supply}`);
-  lines.push(`  Mint authority:   ${mint.mintAuthority ?? "none (fixed supply)"}`);
-  lines.push(`  Freeze authority: ${mint.freezeAuthority ?? "none"}`);
+  lines.push(`  Mint authority:   ${formatBaseAuthority(mint.mintAuthority, "fixed supply")}`);
+  lines.push(`  Freeze authority: ${formatBaseAuthority(mint.freezeAuthority, "not freezable")}`);
 
   if (mint.programKind === "spl-token") {
     lines.push("");
@@ -259,4 +333,16 @@ export function formatAssessmentLines(assessment: Assessment): string[] {
 
 function formatList(values: string[]): string {
   return values.length === 0 ? "none" : values.join(", ");
+}
+
+// Render a base mint or freeze authority, distinguishing None, the zero/System key
+// (effectively renounced, no signer), and a live key.
+function formatBaseAuthority(key: string | null, noneNote: string): string {
+  if (key === null) {
+    return `none (${noneNote})`;
+  }
+  if (key === SYSTEM_PROGRAM_KEY) {
+    return `${key} (System Program, no signer: effectively renounced)`;
+  }
+  return key;
 }

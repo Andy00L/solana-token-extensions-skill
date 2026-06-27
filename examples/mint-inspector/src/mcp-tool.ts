@@ -12,6 +12,8 @@ export type AccountFetcher = (addressInput: string, rpcUrl: string) => Promise<F
 export type InspectToolInput = {
   mintAddress: string;
   rpcUrl?: string;
+  // Current epoch, used to resolve the active transfer fee under the two-epoch rule.
+  currentEpoch?: number;
 };
 
 export type InspectToolOutput =
@@ -34,7 +36,7 @@ export async function handleInspectMint(
     return { status: "error", reason: fetched.reason };
   }
 
-  const result = inspectAccount(fetched.address, fetched.account);
+  const result = inspectAccount(fetched.address, fetched.account, input.currentEpoch);
   if (result.status === "error") {
     return { status: "error", reason: result.reason };
   }

@@ -1,7 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
-import { inspectAccount } from "../src/inspect";
-import { handleInspectMany } from "../src/inspect-many";
+import { resolveActiveFee } from "../src/decode-mint";
+import { inspectAccount, inspectionSummary, isLiveAuthorityKey } from "../src/inspect";
+import { batchSummary, handleInspectMany } from "../src/inspect-many";
 import type { AccountFetcher } from "../src/mcp-tool";
 import {
   REAL_MINT_FIXTURES,
@@ -67,11 +68,11 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     // PYUSD's permanent delegate is live, so the verdict is critical and the score saturates.
     expect(assessment.posture.overallSeverity).toBe("critical");
     expect(assessment.posture.score).toBe(100);
-    expect(assessment.posture.cexBlockers).toEqual(
-      expect.arrayContaining(["permanent-delegate", "confidential-transfer"]),
-    );
-    // PYUSD's transfer-hook extension has no program set, so it is a medium latent
-    // caveat, not a hard listing blocker (contrast with BNDRG's active hook).
+    // The permanent delegate is the hard CEX blocker. Confidential transfer is
+    // friction (CEX balance opacity), not a hard blocker, and the hook has no
+    // program set, so neither is in cexBlockers.
+    expect(assessment.posture.cexBlockers).toContain("permanent-delegate");
+    expect(assessment.posture.cexBlockers).not.toContain("confidential-transfer");
     expect(assessment.posture.cexBlockers).not.toContain("transfer-hook");
   });
 
@@ -152,7 +153,7 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     expect(result.inspection.assessment.posture.cexBlockers).toContain("transfer-hook");
   });
 
-  it("projects a remediation path on PYUSD that cannot drop below high", () => {
+  it("projects a remediation path on PYUSD that clears the critical but leaves a medium floor", () => {
     const result = inspectFixture("PYUSD");
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
@@ -166,12 +167,13 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
 
     const delegateStep = remediation.steps.find((step) => step.target === "permanent-delegate");
     expect(delegateStep).toBeDefined();
-    // Renouncing the live permanent delegate clears the critical, but the
-    // confidential-transfer extension has no renounce path, so it floors PYUSD at
-    // high. The path tells the truth: this mint cannot be made CEX-clean by
-    // renouncing authorities alone.
-    expect(delegateStep?.afterSeverity).toBe("high");
-    expect(remediation.allRenounced?.afterSeverity).toBe("high");
+    // Renouncing the live permanent delegate clears the critical fund-loss risk and
+    // removes the only hard CEX blocker. The confidential-transfer extension (no
+    // renounce path) and the latent transfer hook remain as medium integration
+    // constraints, so the path floors at medium, not info: renouncing authorities
+    // makes PYUSD listable but not free of integration caveats.
+    expect(delegateStep?.afterSeverity).toBe("medium");
+    expect(remediation.allRenounced?.afterSeverity).toBe("medium");
   });
 
   it("triages all five captured mainnet mints in one batch, worst first", async () => {
@@ -193,5 +195,80 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
     expect(verdicts[0].address).toBe("2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo");
     // PYUSD and BNDRG (active hook) carry CEX blockers; USDC, BERN, sUSD do not.
     expect(aggregate.withCexBlockers).toBe(2);
+  });
+});
+
+describe("resolveActiveFee (two-epoch activation rule)", () => {
+  it("uses the newer fee once the current epoch has reached it", () => {
+    expect(resolveActiveFee(100, 10, 300, 12, 15)).toEqual({
+      activeBasisPoints: 300,
+      scheduledBasisPoints: null,
+      scheduledEpoch: null,
+    });
+  });
+
+  it("keeps the older fee active and flags the pending newer one before activation", () => {
+    expect(resolveActiveFee(100, 10, 9000, 20, 15)).toEqual({
+      activeBasisPoints: 100,
+      scheduledBasisPoints: 9000,
+      scheduledEpoch: 20,
+    });
+  });
+
+  it("falls back to the newer fee when the current epoch is unknown (offline decode)", () => {
+    expect(resolveActiveFee(100, 10, 300, 12)).toEqual({
+      activeBasisPoints: 300,
+      scheduledBasisPoints: null,
+      scheduledEpoch: null,
+    });
+  });
+});
+
+describe("isLiveAuthorityKey (None vs Some(zero) vs Some(key))", () => {
+  it("treats null (COption None) as not live", () => {
+    expect(isLiveAuthorityKey(null)).toBe(false);
+  });
+
+  it("treats the System Program / all-zero key as not live (no signer)", () => {
+    expect(isLiveAuthorityKey("11111111111111111111111111111111")).toBe(false);
+  });
+
+  it("treats a real base58 key as live", () => {
+    expect(isLiveAuthorityKey("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin")).toBe(true);
+  });
+});
+
+describe("structured summaries (agent-consumable verdicts)", () => {
+  it("projects an inspection to a compact verdict", () => {
+    const result = inspectFixture("PYUSD");
+    if (result.status !== "ok") {
+      throw new Error("expected ok");
+    }
+    const summary = inspectionSummary(result.inspection);
+    expect(summary).toMatchObject({
+      kind: "mint",
+      address: "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+      severity: "critical",
+      score: 100,
+    });
+    expect(summary.cexBlockers).toContain("permanent-delegate");
+  });
+
+  it("projects a batch report to a compact summary with a flat verdict list", async () => {
+    const output = await handleInspectMany(
+      { mintAddresses: REAL_MINT_FIXTURES.map((fixture) => fixture.address) },
+      realFixtureFetcher(),
+      "https://default.example/rpc",
+    );
+    if (output.status !== "ok") {
+      throw new Error("expected ok");
+    }
+    const summary = batchSummary(output.report);
+    expect(summary.total).toBe(5);
+    expect(summary.withCexBlockers).toBe(2);
+    expect(summary.verdicts).toHaveLength(5);
+    expect(summary.verdicts[0]).toMatchObject({ status: "ok", severity: "critical" });
+    // The compact verdicts carry no nested inspection object.
+    expect(summary.verdicts[0]).not.toHaveProperty("inspection");
   });
 });

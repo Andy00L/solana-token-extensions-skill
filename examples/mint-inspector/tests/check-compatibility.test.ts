@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCompatibility, formatCompatibilityReport } from "../src/check-compatibility";
+import { checkCompatibility, compatibilitySummary, formatCompatibilityReport } from "../src/check-compatibility";
 
 describe("checkCompatibility", () => {
   it("flags the scaled-ui-amount plus interest-bearing init rejection as a high conflict", () => {
@@ -38,5 +38,14 @@ describe("checkCompatibility", () => {
     expect(report).toContain("extension compatibility check");
     expect(report).toContain("transfer-hook");
     expect(report).toContain("Posture:");
+  });
+
+  it("projects a compact summary an agent can branch on", () => {
+    const summary = compatibilitySummary(checkCompatibility({ extensions: ["scaled-ui-amount", "interest-bearing"] }));
+
+    expect(summary.recognized).toEqual(["scaled-ui-amount", "interest-bearing"]);
+    expect(summary.severity).toBe("high");
+    expect(summary.conflicts).toHaveLength(1);
+    expect(summary.conflicts[0].title.toLowerCase()).toContain("rejected at init");
   });
 });

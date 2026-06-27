@@ -61,6 +61,8 @@ export type BatchInputError =
 export type InspectManyInput = {
   mintAddresses: string[];
   rpcUrl?: string;
+  // Current epoch, threaded to each inspection for active-transfer-fee resolution.
+  currentEpoch?: number;
 };
 
 export type InspectManyOutput =
@@ -150,7 +152,11 @@ export async function handleInspectMany(
   for (const address of addresses) {
     // Sequential by design: an injected fetcher in tests is deterministic, and a
     // real RPC is friendlier to rate limits one request at a time for this size.
-    const output = await handleInspectMint({ mintAddress: address, rpcUrl: input.rpcUrl }, fetchAccount, defaultRpcUrl);
+    const output = await handleInspectMint(
+      { mintAddress: address, rpcUrl: input.rpcUrl, currentEpoch: input.currentEpoch },
+      fetchAccount,
+      defaultRpcUrl,
+    );
     if (output.status === "error") {
       verdicts.push({ address, status: "error", reason: output.reason });
       continue;
@@ -169,6 +175,49 @@ export async function handleInspectMany(
 
   const sorted = sortVerdicts(verdicts);
   return { status: "ok", report: { aggregate: aggregateVerdicts(sorted), verdicts: sorted } };
+}
+
+// A compact, agent-consumable projection of a batch report: the aggregate plus a
+// flat per-address verdict list, without the nested full inspections. Emitted as MCP
+// structuredContent.
+export type BatchSummaryVerdict = {
+  address: string;
+  status: "ok" | "error";
+  severity?: Severity;
+  score?: number;
+  cexBlockers?: string[];
+};
+
+export type BatchSummary = {
+  total: number;
+  inspected: number;
+  failed: number;
+  worstSeverity: Severity;
+  withCexBlockers: number;
+  verdicts: BatchSummaryVerdict[];
+};
+
+/** Project a batch report to its compact, agent-consumable summary. */
+export function batchSummary(report: BatchReport): BatchSummary {
+  const { aggregate } = report;
+  return {
+    total: aggregate.total,
+    inspected: aggregate.inspected,
+    failed: aggregate.failed,
+    worstSeverity: aggregate.worstSeverity,
+    withCexBlockers: aggregate.withCexBlockers,
+    verdicts: report.verdicts.map((verdict) =>
+      verdict.status === "ok"
+        ? {
+            address: verdict.address,
+            status: "ok",
+            severity: verdict.severity,
+            score: verdict.score,
+            cexBlockers: verdict.cexBlockers,
+          }
+        : { address: verdict.address, status: "error" },
+    ),
+  };
 }
 
 /** A human-readable message for a batch-level input error. */

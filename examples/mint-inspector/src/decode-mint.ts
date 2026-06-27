@@ -76,7 +76,7 @@ export type DecodeResult =
  * the account in (or null when it does not exist), so this function is fully
  * deterministic and testable offline.
  */
-export function decodeMint(address: PublicKey, accountInfo: AccountInfo<Buffer> | null): DecodeResult {
+export function decodeMint(address: PublicKey, accountInfo: AccountInfo<Buffer> | null, currentEpoch?: number): DecodeResult {
   if (accountInfo === null) {
     return { status: "error", reason: { kind: "account-not-found" } };
   }
@@ -97,7 +97,7 @@ export function decodeMint(address: PublicKey, accountInfo: AccountInfo<Buffer> 
   }
 
   // Classic SPL Token mints carry no extension TLV; only Token-2022 mints do.
-  const extensions = programKind === "token-2022" ? decodeExtensions(mint) : [];
+  const extensions = programKind === "token-2022" ? decodeExtensions(mint, currentEpoch) : [];
 
   return {
     status: "ok",
@@ -125,22 +125,22 @@ function classifyOwner(owner: PublicKey): TokenProgramKind | null {
   return null;
 }
 
-function decodeExtensions(mint: Mint): DecodedExtension[] {
-  return getExtensionTypes(mint.tlvData).map((code) => describeExtension(mint, code));
+function decodeExtensions(mint: Mint, currentEpoch?: number): DecodedExtension[] {
+  return getExtensionTypes(mint.tlvData).map((code) => describeExtension(mint, code, currentEpoch));
 }
 
-function describeExtension(mint: Mint, code: ExtensionType): DecodedExtension {
+function describeExtension(mint: Mint, code: ExtensionType, currentEpoch?: number): DecodedExtension {
   const entry = lookupExtension(code);
   if (entry === null) {
     return { code, id: "unrecognized", label: `Unrecognized extension (code ${code})`, detail: {} };
   }
-  return { code, id: entry.id, label: entry.label, detail: enrichExtension(mint, code) };
+  return { code, id: entry.id, label: entry.label, detail: enrichExtension(mint, code, currentEpoch) };
 }
 
-function enrichExtension(mint: Mint, code: ExtensionType): Record<string, string> {
+function enrichExtension(mint: Mint, code: ExtensionType, currentEpoch?: number): Record<string, string> {
   switch (code) {
     case ExtensionType.TransferFeeConfig:
-      return describeTransferFee(mint);
+      return describeTransferFee(mint, currentEpoch);
     case ExtensionType.TransferHook:
       return describeTransferHook(mint);
     case ExtensionType.PermanentDelegate:
@@ -164,17 +164,74 @@ function enrichExtension(mint: Mint, code: ExtensionType): Record<string, string
   }
 }
 
-function describeTransferFee(mint: Mint): Record<string, string> {
+export type ResolvedFee = {
+  // The fee in effect now, in basis points.
+  activeBasisPoints: number;
+  // A different fee scheduled for a future epoch, surfaced only when the current
+  // epoch is known and a pending change differs from the active rate; else null.
+  scheduledBasisPoints: number | null;
+  scheduledEpoch: number | null;
+};
+
+/**
+ * Resolve which transfer fee is active under the two-epoch activation rule: the
+ * newer schedule applies once the current epoch reaches its epoch, otherwise the
+ * older one is in effect. When the current epoch is unknown (offline decode) the
+ * newer fee is reported, which is correct for the common case of a fee set once
+ * (older == newer); a genuinely pending change is only distinguishable with the epoch.
+ * Source: spl-token-2022 transfer_fee/mod.rs get_epoch_fee.
+ */
+export function resolveActiveFee(
+  olderBasisPoints: number,
+  olderEpoch: number,
+  newerBasisPoints: number,
+  newerEpoch: number,
+  currentEpoch?: number,
+): ResolvedFee {
+  if (currentEpoch === undefined || currentEpoch >= newerEpoch) {
+    return { activeBasisPoints: newerBasisPoints, scheduledBasisPoints: null, scheduledEpoch: null };
+  }
+  // The newer schedule is still in the future: the older fee is active and the
+  // newer one is pending. Surface the pending change only when it actually differs.
+  const changes = newerBasisPoints !== olderBasisPoints;
+  return {
+    activeBasisPoints: olderBasisPoints,
+    scheduledBasisPoints: changes ? newerBasisPoints : null,
+    scheduledEpoch: changes ? newerEpoch : null,
+  };
+}
+
+function describeTransferFee(mint: Mint, currentEpoch?: number): Record<string, string> {
   const config = getTransferFeeConfig(mint);
   if (config === null) {
     return {};
   }
-  return {
-    basisPoints: config.newerTransferFee.transferFeeBasisPoints.toString(),
+  const olderBasisPoints = config.olderTransferFee.transferFeeBasisPoints;
+  const newerBasisPoints = config.newerTransferFee.transferFeeBasisPoints;
+  const olderEpoch = Number(config.olderTransferFee.epoch);
+  const newerEpoch = Number(config.newerTransferFee.epoch);
+  const resolved = resolveActiveFee(olderBasisPoints, olderEpoch, newerBasisPoints, newerEpoch, currentEpoch);
+  const detail: Record<string, string> = {
+    basisPoints: resolved.activeBasisPoints.toString(),
     maximumFee: config.newerTransferFee.maximumFee.toString(),
     feeConfigAuthority: describeOptionalKey(config.transferFeeConfigAuthority),
     withdrawWithheldAuthority: describeOptionalKey(config.withdrawWithheldAuthority),
   };
+  // Surface both schedules only when they differ, so a single-fee mint reads cleanly
+  // while a scheduled change stays visible.
+  if (olderBasisPoints !== newerBasisPoints) {
+    detail.olderBasisPoints = olderBasisPoints.toString();
+    detail.olderEpoch = olderEpoch.toString();
+    detail.newerBasisPoints = newerBasisPoints.toString();
+    detail.newerEpoch = newerEpoch.toString();
+  }
+  if (resolved.scheduledBasisPoints !== null) {
+    detail.scheduledBasisPoints = resolved.scheduledBasisPoints.toString();
+    if (resolved.scheduledEpoch !== null) {
+      detail.scheduledEpoch = resolved.scheduledEpoch.toString();
+    }
+  }
+  return detail;
 }
 
 function describeTransferHook(mint: Mint): Record<string, string> {
@@ -336,7 +393,7 @@ export type EntityDecodeResult =
  * account, detecting which from the data length and the account-type byte that
  * Token-2022 stores at offset ACCOUNT_SIZE. Pure: the caller performs the IO.
  */
-export function decodeTokenEntity(address: PublicKey, accountInfo: AccountInfo<Buffer> | null): EntityDecodeResult {
+export function decodeTokenEntity(address: PublicKey, accountInfo: AccountInfo<Buffer> | null, currentEpoch?: number): EntityDecodeResult {
   if (accountInfo === null) {
     return { status: "error", reason: { kind: "account-not-found" } };
   }
@@ -361,7 +418,7 @@ export function decodeTokenEntity(address: PublicKey, accountInfo: AccountInfo<B
   }
 
   // A mint, or an unrecognized size that decodeMint rejects with a typed error.
-  const mintResult = decodeMint(address, accountInfo);
+  const mintResult = decodeMint(address, accountInfo, currentEpoch);
   if (mintResult.status === "error") {
     return { status: "error", reason: mintResult.reason };
   }
