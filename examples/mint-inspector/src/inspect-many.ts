@@ -87,7 +87,7 @@ function cexBlockersOf(inspection: Inspection): string[] {
 }
 
 /** Roll a set of per-address verdicts up into the aggregate summary. Pure. */
-export function aggregateVerdicts(verdicts: BatchVerdict[]): BatchAggregate {
+function aggregateVerdicts(verdicts: BatchVerdict[]): BatchAggregate {
   const countsBySeverity: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   let inspected = 0;
   let failed = 0;

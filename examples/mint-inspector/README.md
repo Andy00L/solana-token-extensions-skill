@@ -15,12 +15,13 @@ npm install
 ## CLI
 
 ```bash
-npm run inspect -- <MINT_ADDRESS> [--rpc <URL>]   # text report
+npm run inspect -- <MINT_ADDRESS> [--rpc <URL>]   # text report (with a renounce-to-remediate path)
 npm run inspect -- <MINT_ADDRESS> --json          # machine-readable JSON
+npm run inspect -- <ADDR_1> <ADDR_2> ...          # batch triage of many addresses
 npm run inspect -- --help
 ```
 
-The default RPC is Solana mainnet-beta. Exit code is 0 on success, 1 on an inspection error (invalid address, RPC failure, account not found, not a mint), and 2 on a usage error.
+The default RPC is Solana mainnet-beta. One address prints the full report; more than one prints a batch summary. Exit code is 0 on success, 1 on an inspection error (invalid address, RPC failure, account not found, not a mint), and 2 on a usage error.
 
 Example, against the PayPal USD (PYUSD) Token-2022 mint:
 
@@ -47,9 +48,38 @@ Integration findings (10):
   [LOW]      Mint close authority; [LOW] Mint authority is live; [INFO] x3
 Posture:
   CEX listing blockers:  permanent-delegate, confidential-transfer
+
+Remediation path (renounce a live authority to lower risk):
+  current: CRITICAL (risk score 100/100)
+  renounce permanent-delegate -> HIGH (100/100)
+  ...
+  renounce all of the above -> HIGH (65/100)
 ```
 
-(Output trimmed; see [DEMO.md](DEMO.md) for the full report.) PYUSD scores **CRITICAL** because its permanent delegate is live. Its transfer-hook extension has no program set, so it is a medium latent caveat and **not** a hard CEX blocker (an active hook, like the WNS NFT fixture, is). The inspector names all eight extensions, including the confidential transfer fee (code 16) the published `@solana/spl-token` enum does not map. Renounce the permanent delegate and the verdict drops, exactly the live-vs-renounced distinction the engine makes visible.
+(Output trimmed; see [DEMO.md](DEMO.md) for the full report.) PYUSD scores **CRITICAL** because its permanent delegate is live. Its transfer-hook extension has no program set, so it is a medium latent caveat and **not** a hard CEX blocker (an active hook, like the WNS NFT fixture, is). The inspector names all eight extensions, including the confidential transfer fee (code 16) the published `@solana/spl-token` enum does not map. The **remediation path** shows that renouncing the permanent delegate drops the tier (CRITICAL to HIGH), but the confidential-transfer extension has no renounce path, so PYUSD cannot reach a CEX-clean verdict by renouncing authorities alone.
+
+### Batch triage
+
+Pass more than one address to triage a whole set at once: a per-mint verdict (worst first) plus an aggregate. Built for "is my exchange's listing set safe."
+
+```
+$ npm run inspect -- <PYUSD> <USDC> <BERN> <sUSD> <BNDRG>
+
+Token-2022 batch inspection
+  Addresses:         5
+  Inspected:         5
+  Failed:            0
+  Worst verdict:     CRITICAL
+  With CEX blockers: 2
+  By severity:       critical 1, high 1, medium 2, low 0, info 1
+
+Per address (worst first):
+  [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate, confidential-transfer)
+  [HIGH 60/100]      8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook)
+  [MEDIUM 25/100]    susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X (mint; no CEX blockers)
+  [MEDIUM 15/100]    CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo (mint; no CEX blockers)
+  [INFO 0/100]       EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
+```
 
 ## MCP server
 

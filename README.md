@@ -44,21 +44,22 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 
 ## How it compares
 
-A like-for-like view of the Token-2022 entries in this bounty, by capability. The peer columns describe the other Token-2022 submissions by type (a docs-only skill, a mints-only risk auditor, and a build-only skill) as of June 2026; capabilities move, so treat the peer cells as a snapshot.
+A like-for-like view of the Token-2022 entries in this bounty, by capability. The peer columns describe the other Token-2022 submissions by type (a docs-plus-hook skill, a mints-only risk auditor, and a build-only skill) as of June 2026; capabilities move, so treat the peer cells as a snapshot.
 
-| Capability | This skill | Docs-only skill | Mints-only auditor | Build-only skill |
+| Capability | This skill | Docs + hook skill | Mints-only auditor | Build-only skill |
 |---|---|---|---|---|
 | Agent-callable MCP tools | 3 (`inspect_mint`, `inspect_many`, `check_extension_compatibility`) | none | none | none |
 | Decode and risk-score a live mint | yes (mints and token accounts) | no | yes (mints only) | no |
-| Batch / portfolio triage in one call | yes (`inspect_many`) | no | no | no |
 | Conditional severity (live vs renounced authority) | yes | no | yes | no |
-| 0-to-100 risk score + per-finding fix | yes | no | yes | no |
-| Renounce-to-remediate projection | yes | no | no | no |
-| Tested Rust transfer hook (`cargo build-sbf`) | yes (22 unit tests, hardened to the security checklist) | yes | no | no |
-| Offline deterministic suite | 84 checks | partial | partial | none |
-| Confidential-transfer + transfer-hook coexistence (PYUSD) | correct (they coexist) | not covered | not covered | marked incompatible (incorrect) |
+| Risk score + per-finding fix | yes (0-to-100 + fix) | no | yes (tiered + fix templates) | no |
+| Renounce-to-remediate projection (recomputed verdict) | yes | no | no (static templates) | no |
+| Batch / portfolio triage in one call | yes (`inspect_many`) | no | no | no |
+| Token-account inspection | yes | no | no | no |
+| Tested Rust transfer hook + builder (`cargo build-sbf`) | yes (22 unit tests, hardened) | hook only (~20 tests) | no | no |
+| Full build + integrate + migrate surface | yes | partial (docs) | no (audit-only) | partial (build docs) |
+| Offline deterministic suite | 84 checks (build, hook, inspector, e2e) | hook tests | tested audit lib + CI | none |
 
-The pattern: each peer misses at least two of MCP tooling, a tested Rust hook, batch triage, and the remediation projection. This skill is the only entry that has all four.
+The mints-only auditor is a capable, actively maintained peer on the audit axis (conditional severity, scoring, fix templates, CI). This skill matches that core and adds what the others lack: three agent-callable MCP tools, batch triage, a recomputed renounce-to-remediate projection, token-account inspection, and a tested Rust transfer hook plus the full build and integration surface. It is the only entry that has all of them.
 
 ## What's included
 
