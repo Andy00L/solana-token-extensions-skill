@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessExtensions, assessTokenAccount } from "../src/assess-risk";
+import { assessExtensions, assessTokenAccount, projectRenouncements } from "../src/assess-risk";
 
 describe("assessExtensions", () => {
   it("flags transfer hook and permanent delegate as CEX blockers, fee as friction", () => {
@@ -154,5 +154,59 @@ describe("assessExtensions", () => {
     const titles = assessment.findings.map((finding) => finding.title);
     expect(titles.some((title) => title.includes("CPI Guard"))).toBe(true);
     expect(titles.some((title) => title.toLowerCase().includes("memo"))).toBe(true);
+  });
+});
+
+describe("projectRenouncements", () => {
+  it("projects renouncing a live permanent delegate from critical to low", () => {
+    const remediation = projectRenouncements([{ id: "permanent-delegate", authorityRenounced: false }]);
+
+    expect(remediation.currentSeverity).toBe("critical");
+    expect(remediation.currentScore).toBe(100);
+    expect(remediation.steps).toHaveLength(1);
+    expect(remediation.steps[0].target).toBe("permanent-delegate");
+    expect(remediation.steps[0].afterSeverity).toBe("low");
+    // A single renounceable authority needs no separate all-renounced projection.
+    expect(remediation.allRenounced).toBeNull();
+  });
+
+  it("orders steps by largest risk reduction and adds an all-renounced projection", () => {
+    const remediation = projectRenouncements(
+      [
+        { id: "permanent-delegate", authorityRenounced: false },
+        { id: "transfer-fee", authorityRenounced: false },
+      ],
+      { mintAuthorityLive: true, freezeAuthorityLive: true },
+    );
+
+    expect(remediation.currentSeverity).toBe("critical");
+    // The permanent delegate is the dominating risk, so renouncing it leads.
+    expect(remediation.steps[0].target).toBe("permanent-delegate");
+    expect(remediation.steps[0].afterScore).toBeLessThan(remediation.currentScore);
+    expect(remediation.steps).toHaveLength(4); // delegate, fee, mint authority, freeze authority
+    expect(remediation.allRenounced).not.toBeNull();
+    expect(remediation.allRenounced?.afterSeverity).toBe("low");
+  });
+
+  it("shows that renouncing a secondary authority alone leaves a dominating delegate critical", () => {
+    const remediation = projectRenouncements([
+      { id: "permanent-delegate", authorityRenounced: false },
+      { id: "pausable", authorityRenounced: false },
+    ]);
+
+    const pausableStep = remediation.steps.find((step) => step.target === "pausable");
+    // Renouncing the pause authority does not help while the delegate is still live.
+    expect(pausableStep?.afterSeverity).toBe("critical");
+    expect(pausableStep?.afterScore).toBe(100);
+    const delegateStep = remediation.steps.find((step) => step.target === "permanent-delegate");
+    expect(delegateStep?.afterScore).toBeLessThan(100);
+  });
+
+  it("returns no remediation steps for a calm metadata-only mint", () => {
+    const remediation = projectRenouncements([{ id: "metadata-pointer" }, { id: "token-metadata" }]);
+
+    expect(remediation.currentSeverity).toBe("info");
+    expect(remediation.steps).toHaveLength(0);
+    expect(remediation.allRenounced).toBeNull();
   });
 });

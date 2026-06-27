@@ -1,6 +1,6 @@
 # Evals: expected behavior on representative prompts
 
-A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector and the compatibility checker) are covered by the 43 offline tests in `examples/mint-inspector`.
+A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the batch triage, the remediation projection, and the compatibility checker) are covered by the 54 offline tests in `examples/mint-inspector`.
 
 | # | Prompt | Routes to | Must assert |
 |---|--------|-----------|-------------|
@@ -19,5 +19,7 @@ A self-check of what the skill should route to and what it must assert. Each cas
 | 13 | "What does the confidential transfer fee extension (code 16) on PYUSD mean?" | mint-inspector.md, confidential-transfer.md | It is required when a mint has both a transfer fee and confidential transfers; the inspector names it (the JS enum does not) |
 | 14 | "This mint has a permanent delegate but the delegate is null. Still critical?" | mint-inspector.md, integration-compatibility.md | No: severity is conditional on authority liveness. A live permanent delegate is critical; a renounced (null) one is low and clears the CEX block |
 | 15 | "Is PYUSD's transfer hook a listing blocker?" | mint-inspector.md | No: PYUSD's hook extension has no program set, so it is a medium latent caveat, not a hard blocker; an active hook (a program is set) is high and blocks |
+| 16 | "Vet this whole listing set: mintA, mintB, mintC" | mint-inspector.md | Use the inspect_many MCP tool or pass several addresses to the CLI; it returns a per-mint verdict and an aggregate (worst verdict, counts by severity, how many carry a CEX listing blocker) |
+| 17 | "This mint is CRITICAL from a live permanent delegate. What would lower the risk?" | mint-inspector.md | The renounce-to-remediate path: renouncing the permanent delegate drops the verdict and the 0-to-100 score; a mint that also carries confidential transfer cannot drop below high (it has no renounce path) |
 
-These cases encode the corrections this skill makes over a flat reference: the confidential-transfer status and re-enablement timeline (3), the runtime-enforced exclusion (4), the corrected coexistence (5), the complete decode (13), conditional severity on authority liveness (14, 15), and the executable tools (6, 11).
+These cases encode the corrections this skill makes over a flat reference: the confidential-transfer status and re-enablement timeline (3), the runtime-enforced exclusion (4), the corrected coexistence (5), the complete decode (13), conditional severity on authority liveness (14, 15), batch listing-set triage (16), the renounce-to-remediate path (17), and the executable tools (6, 11).

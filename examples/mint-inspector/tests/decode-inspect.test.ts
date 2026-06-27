@@ -85,6 +85,13 @@ describe("inspectAccount over real on-chain mint data", () => {
 
     // Permanent delegate is the listing blocker in this set.
     expect(result.inspection.assessment.posture.cexBlockers).toContain("permanent-delegate");
+
+    // The inspection carries a renounce-to-remediate path led by the delegate.
+    const { remediation } = result.inspection;
+    expect(remediation.currentSeverity).toBe("critical");
+    expect(remediation.steps[0].target).toBe("permanent-delegate");
+    expect(remediation.steps[0].afterScore).toBeLessThan(remediation.currentScore);
+    expect(formatReport(result.inspection)).toContain("Remediation path");
   });
 
   it("proves the Non-Transferable plus Transfer Hook conflict on a real mint", () => {

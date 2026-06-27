@@ -14,14 +14,16 @@ import type { DecodeError } from "./decode-mint";
 import { describeError } from "./describe-error";
 import { type FetchError, fetchMintAccount, formatFetchError } from "./fetch-account";
 import { formatDecodeError, formatReport, inspectAccount } from "./inspect";
+import { formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
 
 // Solana public mainnet RPC. Source: https://solana.com/docs/core/clusters
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 
 const USAGE = [
-  "Usage: inspect-mint <MINT_ADDRESS> [--rpc <URL>] [--json]",
+  "Usage: inspect-mint <ADDRESS> [<ADDRESS> ...] [--rpc <URL>] [--json]",
   "",
-  "  <MINT_ADDRESS>   base58 mint or token account address to inspect",
+  "  <ADDRESS>        base58 mint or token account address to inspect;",
+  "                   pass more than one to run a batch (portfolio) triage",
   `  --rpc <URL>      RPC endpoint (default: ${DEFAULT_RPC_URL})`,
   "  --json           print the inspection as JSON instead of text",
   "  -h, --help       show this help",
@@ -30,10 +32,10 @@ const USAGE = [
 type ParsedArgs =
   | { status: "help" }
   | { status: "error"; message: string }
-  | { status: "ok"; address: string; rpcUrl: string; json: boolean };
+  | { status: "ok"; addresses: string[]; rpcUrl: string; json: boolean };
 
 function parseArgs(argv: string[]): ParsedArgs {
-  let address: string | null = null;
+  const addresses: string[] = [];
   let rpcUrl = DEFAULT_RPC_URL;
   let json = false;
 
@@ -58,17 +60,13 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (argument.startsWith("-")) {
       return { status: "error", message: `unknown flag: ${argument}` };
     }
-    if (address === null) {
-      address = argument;
-      continue;
-    }
-    return { status: "error", message: `unexpected extra argument: ${argument}` };
+    addresses.push(argument);
   }
 
-  if (address === null) {
+  if (addresses.length === 0) {
     return { status: "error", message: "missing required mint address" };
   }
-  return { status: "ok", address, rpcUrl, json };
+  return { status: "ok", addresses, rpcUrl, json };
 }
 
 // Emit an inspection error. In --json mode every error is a structured object on
@@ -93,7 +91,31 @@ async function runCli(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const fetched = await fetchMintAccount(parsed.address, parsed.rpcUrl);
+  // More than one address: run a batch (portfolio) triage. A bad address inside
+  // the batch becomes an error verdict in the report rather than failing the run.
+  if (parsed.addresses.length > 1) {
+    const output = await handleInspectMany(
+      { mintAddresses: parsed.addresses, rpcUrl: parsed.rpcUrl },
+      fetchMintAccount,
+      DEFAULT_RPC_URL,
+    );
+    if (output.status === "error") {
+      if (parsed.json) {
+        process.stdout.write(`${JSON.stringify({ status: "error", reason: output.reason }, null, 2)}\n`);
+      } else {
+        process.stderr.write(`[InspectMintCli] ${formatBatchInputError(output.reason)}\n`);
+      }
+      return 2;
+    }
+    if (parsed.json) {
+      process.stdout.write(`${JSON.stringify(output.report, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${formatBatchReport(output.report)}\n`);
+    }
+    return 0;
+  }
+
+  const fetched = await fetchMintAccount(parsed.addresses[0], parsed.rpcUrl);
   if (fetched.status === "error") {
     emitError(parsed.json, formatFetchError(fetched.reason), fetched.reason);
     return 1;

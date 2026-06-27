@@ -43,3 +43,16 @@ fn process_instruction(
 ) -> ProgramResult {
     processor::process(program_id, accounts, instruction_data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn public_constants_are_stable() {
+        // The off-chain client depends on both: the seed prefix derives the allow
+        // PDA, and the discriminator is prepended to AddToAllowlist instruction data.
+        assert_eq!(ALLOW_SEED_PREFIX, b"allow");
+        assert_eq!(ADD_TO_ALLOWLIST_DISCRIMINATOR.len(), 8);
+    }
+}

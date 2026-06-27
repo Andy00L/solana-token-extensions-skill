@@ -1,5 +1,5 @@
-make verify, captured 2026-06-24.
-All examples build and test offline (no validator, no devnet). 60 checks green.
+make verify, captured 2026-06-27.
+All examples build and test offline (no validator, no devnet). 84 checks green.
 
 $ cd examples && make verify
 
@@ -9,18 +9,31 @@ cd transfer-hook-allowlist && cargo build-sbf && cargo test
     Finished `test` profile [unoptimized + debuginfo] target(s)
      Running unittests src/lib.rs
 
-running 9 tests
+running 22 tests
+test error::tests::error_codes_are_stable_documented_values ... ok
 test error::tests::errors_map_to_distinct_codes ... ok
+test processor::tests::add_to_allowlist_discriminator_does_not_collide_with_interface_instructions ... ok
+test processor::tests::add_to_allowlist_is_idempotent_when_allow_account_exists ... ok
 test processor::tests::add_to_allowlist_rejects_a_mint_not_owned_by_token_2022 ... ok
+test processor::tests::add_to_allowlist_rejects_a_mint_with_no_authority ... ok
+test processor::tests::add_to_allowlist_rejects_a_non_authority_signer ... ok
+test processor::tests::add_to_allowlist_rejects_an_unexpected_allow_pda ... ok
+test processor::tests::add_to_allowlist_requires_five_accounts ... ok
 test processor::tests::add_to_allowlist_requires_signer ... ok
-test processor::tests::execute_denies_when_not_transferring ... ok
-test processor::tests::execute_rejects_too_few_accounts ... ok
-test processor::tests::initialize_requires_authority_signer ... ok
-test processor::tests::process_rejects_empty_input ... ok
-test processor::tests::validation_list_builds_and_initializes ... ok
 test processor::tests::allow_pda_is_deterministic_and_scoped_to_mint_and_destination ... ok
+test processor::tests::execute_denies_when_not_transferring ... ok
+test processor::tests::execute_rejects_a_mint_sized_source_account ... ok
+test processor::tests::execute_rejects_too_few_accounts ... ok
+test processor::tests::execute_with_five_accounts_is_rejected ... ok
+test processor::tests::initialize_rejects_a_wrong_extra_account_metas_pda ... ok
+test processor::tests::initialize_requires_authority_signer ... ok
+test processor::tests::initialize_requires_four_accounts ... ok
+test processor::tests::process_rejects_empty_input ... ok
+test processor::tests::update_extra_account_meta_list_is_rejected ... ok
+test processor::tests::validation_list_builds_and_initializes ... ok
+test tests::public_constants_are_stable ... ok
 
-test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 === ts-multi-extension-mint (TypeScript + LiteSVM, one file per process) ===
 cd ts-multi-extension-mint && npm ci && npm test
@@ -34,19 +47,20 @@ cd ts-multi-extension-mint && npm ci && npm test
 === mint-inspector (TypeScript + LiteSVM, one file per process) ===
 cd mint-inspector && npm ci && npm test
  (tsc --noEmit: ok)
- PASS tests/assess-risk.test.ts          (16 tests)
+ PASS tests/assess-risk.test.ts          (20 tests)
  PASS tests/check-compatibility.test.ts   (5 tests)
  PASS tests/decode-inspect.test.ts        (8 tests)
  PASS tests/extension-catalog.test.ts     (4 tests)
+ PASS tests/inspect-many.test.ts          (5 tests)
  PASS tests/mcp-tool.test.ts              (4 tests)
- PASS tests/real-mint-decode.test.ts      (6 tests)
- => 43 tests (conditional severity, 5 captured mainnet mints, a built controls mint, and a token-account decode)
+ PASS tests/real-mint-decode.test.ts      (8 tests)
+ => 54 tests (conditional severity, renounce remediation, batch triage, 5 captured mainnet mints, a built controls mint, and a token-account decode)
 
 === Summary ===
-Rust hook:       9 cargo unit tests
-ts-multi mint:   7 LiteSVM tests + 1 transfer-hook e2e scenario
-mint-inspector: 43 offline tests (conditional severity, mints and a token account, 5 captured mainnet mints)
-Total:          60 checks, all green.
+Rust hook:       22 cargo unit tests
+ts-multi mint:    7 LiteSVM tests + 1 transfer-hook e2e scenario
+mint-inspector:  54 offline tests (conditional severity, renounce remediation, batch triage, mints and a token account, 5 captured mainnet mints)
+Total:           84 checks, all green.
 
 Note on the runner: LiteSVM's native addon aborts intermittently (std::bad_alloc)
 inside a vitest worker, never under a plain node process. run-tests.mjs runs each

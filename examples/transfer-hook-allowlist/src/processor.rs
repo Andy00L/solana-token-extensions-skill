@@ -485,4 +485,350 @@ mod tests {
             Err(AllowlistError::UnexpectedMintOwner.into())
         );
     }
+
+    /// Build a valid Token-2022 base mint buffer (82 bytes, no extensions) with the
+    /// given mint authority, so AddToAllowlist's authority gate can be exercised in
+    /// a unit test without a runtime. Source: spl_token_2022::state::Mint (Pack).
+    fn packed_mint(mint_authority: Option<Pubkey>) -> Vec<u8> {
+        use solana_program::program_option::COption;
+        use solana_program::program_pack::Pack;
+        use spl_token_2022::state::Mint;
+
+        let state = Mint {
+            mint_authority: match mint_authority {
+                Some(key) => COption::Some(key),
+                None => COption::None,
+            },
+            supply: 0,
+            decimals: 0,
+            is_initialized: true,
+            freeze_authority: COption::None,
+        };
+        let mut buffer = vec![0u8; Mint::LEN];
+        Mint::pack(state, &mut buffer).unwrap();
+        buffer
+    }
+
+    /// The Token-2022 program id as a solana_program Pubkey, for use as an account
+    /// owner in tests (the owner check compares raw bytes).
+    fn token_2022_owner() -> Pubkey {
+        Pubkey::new_from_array(spl_token_2022::id().to_bytes())
+    }
+
+    #[test]
+    fn update_extra_account_meta_list_is_rejected() {
+        // This program freezes its validation list, so the interface Update is a
+        // no-op error, never an account mutation. Routed before any account read.
+        let program = test_program_id();
+        let data = TransferHookInstruction::UpdateExtraAccountMetaList {
+            extra_account_metas: vec![],
+        }
+        .pack();
+        assert_eq!(
+            process(&program, &[], &data),
+            Err(ProgramError::InvalidInstructionData)
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_discriminator_does_not_collide_with_interface_instructions() {
+        // process() routes on the 8-byte prefix first, so a real transfer-hook
+        // instruction must never begin with our discriminator or it would misroute.
+        let execute = TransferHookInstruction::Execute { amount: 0 }.pack();
+        let initialize = TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas: vec![],
+        }
+        .pack();
+        let update = TransferHookInstruction::UpdateExtraAccountMetaList {
+            extra_account_metas: vec![],
+        }
+        .pack();
+        for encoded in [execute, initialize, update] {
+            assert!(!encoded.starts_with(&ADD_TO_ALLOWLIST_DISCRIMINATOR));
+        }
+    }
+
+    #[test]
+    fn initialize_rejects_a_wrong_extra_account_metas_pda() {
+        // The extra-metas account must equal the program-derived address for the
+        // mint. A signed authority reaches the PDA check, which must reject a
+        // mismatched account before creating anything.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let extra_key = Pubkey::new_from_array([80u8; 32]); // not the derived PDA
+        let mint_key = Pubkey::new_from_array([81u8; 32]);
+        let authority_key = Pubkey::new_from_array([82u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut extra_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut authority_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut extra_data: Vec<u8> = Vec::new();
+        let mut mint_data: Vec<u8> = Vec::new();
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&extra_key, false, true, &mut extra_lamports, &mut extra_data, &owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &owner, false),
+            // authority IS a signer, so the PDA check (not the signer check) fires
+            AccountInfo::new(&authority_key, true, false, &mut authority_lamports, &mut authority_data, &owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &owner, false),
+        ];
+        let metas = vec![ExtraAccountMeta::new_with_seeds(
+            &[Seed::Literal { bytes: b"x".to_vec() }],
+            false,
+            false,
+        )
+        .unwrap()];
+        let data = TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas: metas,
+        }
+        .pack();
+        assert_eq!(process(&program, &accounts, &data), Err(ProgramError::InvalidSeeds));
+    }
+
+    #[test]
+    fn initialize_requires_four_accounts() {
+        // Initialize reads four accounts; provide one so a read fails closed.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let only_key = Pubkey::new_from_array([83u8; 32]);
+        let mut only_lamports = 0u64;
+        let mut only_data: Vec<u8> = Vec::new();
+        let accounts = [AccountInfo::new(&only_key, false, true, &mut only_lamports, &mut only_data, &owner, false)];
+        let data = TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas: vec![],
+        }
+        .pack();
+        assert!(process(&program, &accounts, &data).is_err());
+    }
+
+    #[test]
+    fn execute_with_five_accounts_is_rejected() {
+        // Execute needs six accounts (source, mint, destination, owner, validation,
+        // allow); provide five so the sixth read fails closed.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let source_key = Pubkey::new_from_array([50u8; 32]);
+        let mint_key = Pubkey::new_from_array([51u8; 32]);
+        let destination_key = Pubkey::new_from_array([52u8; 32]);
+        let owner_key = Pubkey::new_from_array([53u8; 32]);
+        let validation_key = Pubkey::new_from_array([54u8; 32]);
+        let mut source_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut owner_lamports = 0u64;
+        let mut validation_lamports = 0u64;
+        let mut source_data: Vec<u8> = Vec::new();
+        let mut mint_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut owner_data: Vec<u8> = Vec::new();
+        let mut validation_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&source_key, false, false, &mut source_lamports, &mut source_data, &owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &owner, false),
+            AccountInfo::new(&owner_key, false, false, &mut owner_lamports, &mut owner_data, &owner, false),
+            AccountInfo::new(&validation_key, false, false, &mut validation_lamports, &mut validation_data, &owner, false),
+        ];
+        let data = TransferHookInstruction::Execute { amount: 1 }.pack();
+        assert!(process(&program, &accounts, &data).is_err());
+    }
+
+    #[test]
+    fn execute_rejects_a_mint_sized_source_account() {
+        // Adversarial: a mint-sized (82-byte) account is passed where a token
+        // account is expected. It must not unpack as an account of the mint, so
+        // Execute denies (checklist item 5, account-mint linkage).
+        let program = test_program_id();
+        let token_owner = token_2022_owner();
+        let source_key = Pubkey::new_from_array([55u8; 32]);
+        let mint_key = Pubkey::new_from_array([56u8; 32]);
+        let destination_key = Pubkey::new_from_array([57u8; 32]);
+        let owner_key = Pubkey::new_from_array([58u8; 32]);
+        let validation_key = Pubkey::new_from_array([59u8; 32]);
+        let allow_key = Pubkey::new_from_array([60u8; 32]);
+        let mut source_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut owner_lamports = 0u64;
+        let mut validation_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut source_data = vec![0u8; 82]; // mint-sized, not a token account
+        let mut mint_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut owner_data: Vec<u8> = Vec::new();
+        let mut validation_data: Vec<u8> = Vec::new();
+        let mut allow_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&source_key, false, false, &mut source_lamports, &mut source_data, &token_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &token_owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &token_owner, false),
+            AccountInfo::new(&owner_key, false, false, &mut owner_lamports, &mut owner_data, &token_owner, false),
+            AccountInfo::new(&validation_key, false, false, &mut validation_lamports, &mut validation_data, &token_owner, false),
+            AccountInfo::new(&allow_key, false, false, &mut allow_lamports, &mut allow_data, &token_owner, false),
+        ];
+        let data = TransferHookInstruction::Execute { amount: 1 }.pack();
+        assert!(process(&program, &accounts, &data).is_err());
+    }
+
+    #[test]
+    fn add_to_allowlist_requires_five_accounts() {
+        // AddToAllowlist reads five accounts; provide one so a read fails closed.
+        let program = test_program_id();
+        let owner = Pubkey::new_from_array([0u8; 32]);
+        let only_key = Pubkey::new_from_array([64u8; 32]);
+        let mut only_lamports = 0u64;
+        let mut only_data: Vec<u8> = Vec::new();
+        let accounts = [AccountInfo::new(&only_key, true, true, &mut only_lamports, &mut only_data, &owner, false)];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert!(process(&program, &accounts, &data).is_err());
+    }
+
+    #[test]
+    fn add_to_allowlist_rejects_a_non_authority_signer() {
+        // A signed caller who is not the mint authority must be rejected, even
+        // though the mint account is genuine and Token-2022-owned.
+        let program = test_program_id();
+        let token_owner = token_2022_owner();
+        let system_owner = Pubkey::new_from_array([0u8; 32]);
+        let real_authority = Pubkey::new_from_array([90u8; 32]);
+        let wrong_signer = Pubkey::new_from_array([91u8; 32]);
+        let mint_key = Pubkey::new_from_array([92u8; 32]);
+        let allow_key = Pubkey::new_from_array([93u8; 32]);
+        let destination_key = Pubkey::new_from_array([94u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut signer_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut signer_data: Vec<u8> = Vec::new();
+        let mut mint_data = packed_mint(Some(real_authority));
+        let mut allow_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&wrong_signer, true, true, &mut signer_lamports, &mut signer_data, &system_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &token_owner, false),
+            AccountInfo::new(&allow_key, false, true, &mut allow_lamports, &mut allow_data, &system_owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &system_owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &system_owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(AllowlistError::UnauthorizedAllowlistManager.into())
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_rejects_a_mint_with_no_authority() {
+        // A mint whose authority is renounced has no one who may manage its
+        // allowlist, so even a signer is rejected.
+        let program = test_program_id();
+        let token_owner = token_2022_owner();
+        let system_owner = Pubkey::new_from_array([0u8; 32]);
+        let signer_key = Pubkey::new_from_array([95u8; 32]);
+        let mint_key = Pubkey::new_from_array([96u8; 32]);
+        let allow_key = Pubkey::new_from_array([97u8; 32]);
+        let destination_key = Pubkey::new_from_array([98u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut signer_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut signer_data: Vec<u8> = Vec::new();
+        let mut mint_data = packed_mint(None);
+        let mut allow_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&signer_key, true, true, &mut signer_lamports, &mut signer_data, &system_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &token_owner, false),
+            AccountInfo::new(&allow_key, false, true, &mut allow_lamports, &mut allow_data, &system_owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &system_owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &system_owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(AllowlistError::UnauthorizedAllowlistManager.into())
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_rejects_an_unexpected_allow_pda() {
+        // The mint authority signs and the mint is genuine, but the allow account
+        // is not the program-derived (mint, destination) PDA, so it is rejected
+        // before anything is created.
+        let program = test_program_id();
+        let token_owner = token_2022_owner();
+        let system_owner = Pubkey::new_from_array([0u8; 32]);
+        let authority_key = Pubkey::new_from_array([100u8; 32]);
+        let mint_key = Pubkey::new_from_array([101u8; 32]);
+        let wrong_allow_key = Pubkey::new_from_array([102u8; 32]); // not the derived PDA
+        let destination_key = Pubkey::new_from_array([103u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let mut authority_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut mint_data = packed_mint(Some(authority_key));
+        let mut allow_data: Vec<u8> = Vec::new();
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&authority_key, true, true, &mut authority_lamports, &mut authority_data, &system_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &token_owner, false),
+            AccountInfo::new(&wrong_allow_key, false, true, &mut allow_lamports, &mut allow_data, &system_owner, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &system_owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &system_owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert_eq!(
+            process(&program, &accounts, &data),
+            Err(AllowlistError::UnexpectedAllowAccount.into())
+        );
+    }
+
+    #[test]
+    fn add_to_allowlist_is_idempotent_when_allow_account_exists() {
+        // A second AddToAllowlist for an already-allowlisted destination is a no-op:
+        // the correct PDA already has data, so the handler returns Ok without
+        // recreating it.
+        let program = test_program_id();
+        let token_owner = token_2022_owner();
+        let system_owner = Pubkey::new_from_array([0u8; 32]);
+        let authority_key = Pubkey::new_from_array([110u8; 32]);
+        let mint_key = Pubkey::new_from_array([111u8; 32]);
+        let destination_key = Pubkey::new_from_array([112u8; 32]);
+        let system_key = Pubkey::new_from_array([0u8; 32]);
+        let (expected_allow, _bump) = Pubkey::find_program_address(
+            &[ALLOW_SEED_PREFIX, mint_key.as_ref(), destination_key.as_ref()],
+            &program,
+        );
+        let mut authority_lamports = 0u64;
+        let mut mint_lamports = 0u64;
+        let mut allow_lamports = 0u64;
+        let mut destination_lamports = 0u64;
+        let mut system_lamports = 0u64;
+        let mut authority_data: Vec<u8> = Vec::new();
+        let mut mint_data = packed_mint(Some(authority_key));
+        let mut allow_data: Vec<u8> = vec![1u8]; // already allowlisted (non-empty)
+        let mut destination_data: Vec<u8> = Vec::new();
+        let mut system_data: Vec<u8> = Vec::new();
+        let accounts = [
+            AccountInfo::new(&authority_key, true, true, &mut authority_lamports, &mut authority_data, &system_owner, false),
+            AccountInfo::new(&mint_key, false, false, &mut mint_lamports, &mut mint_data, &token_owner, false),
+            AccountInfo::new(&expected_allow, false, true, &mut allow_lamports, &mut allow_data, &program, false),
+            AccountInfo::new(&destination_key, false, false, &mut destination_lamports, &mut destination_data, &system_owner, false),
+            AccountInfo::new(&system_key, false, false, &mut system_lamports, &mut system_data, &system_owner, false),
+        ];
+        let data = ADD_TO_ALLOWLIST_DISCRIMINATOR.to_vec();
+        assert_eq!(process(&program, &accounts, &data), Ok(()));
+    }
 }

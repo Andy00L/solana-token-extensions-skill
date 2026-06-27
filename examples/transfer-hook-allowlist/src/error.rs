@@ -72,4 +72,15 @@ mod tests {
         assert_eq!(codes[0], ProgramError::Custom(DESTINATION_NOT_ALLOWED_CODE));
         assert_eq!(codes[4], ProgramError::Custom(UNEXPECTED_MINT_OWNER_CODE));
     }
+
+    #[test]
+    fn error_codes_are_stable_documented_values() {
+        // Pin the wire format: a client decodes these custom codes, so reordering
+        // or renumbering them is a breaking change and must fail this test.
+        assert_eq!(ProgramError::from(AllowlistError::DestinationNotAllowed), ProgramError::Custom(1));
+        assert_eq!(ProgramError::from(AllowlistError::UnexpectedAllowAccount), ProgramError::Custom(2));
+        assert_eq!(ProgramError::from(AllowlistError::UnauthorizedAllowlistManager), ProgramError::Custom(3));
+        assert_eq!(ProgramError::from(AllowlistError::AccountMintMismatch), ProgramError::Custom(4));
+        assert_eq!(ProgramError::from(AllowlistError::UnexpectedMintOwner), ProgramError::Custom(5));
+    }
 }

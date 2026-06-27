@@ -7,14 +7,19 @@ import {
   type AccountAssessment,
   type AssessedExtension,
   type Assessment,
+  type MintAuthorityLiveness,
+  type Remediation,
+  type Severity,
   assessExtensions,
   assessTokenAccount,
   controllingAuthorityKey,
+  projectRenouncements,
 } from "./assess-risk";
 import { type DecodeError, type DecodedExtension, type DecodedMint, type DecodedTokenAccount, decodeTokenEntity } from "./decode-mint";
+import { type FetchError, formatFetchError } from "./fetch-account";
 
 export type Inspection =
-  | { kind: "mint"; mint: DecodedMint; assessment: Assessment }
+  | { kind: "mint"; mint: DecodedMint; assessment: Assessment; remediation: Remediation }
   | { kind: "token-account"; account: DecodedTokenAccount; assessment: AccountAssessment };
 
 export type InspectionResult =
@@ -42,14 +47,32 @@ export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buff
   const assessedExtensions = mint.extensions.map(toAssessedExtension);
   // The base mint and freeze authorities are assessed only for Token-2022 mints;
   // a classic SPL mint is reported as having no Token-2022 extensions.
-  const assessment =
+  const mintAuthorities: MintAuthorityLiveness | undefined =
     mint.programKind === "token-2022"
-      ? assessExtensions(assessedExtensions, {
-          mintAuthorityLive: mint.mintAuthority !== null,
-          freezeAuthorityLive: mint.freezeAuthority !== null,
-        })
-      : assessExtensions(assessedExtensions);
-  return { status: "ok", inspection: { kind: "mint", mint, assessment } };
+      ? { mintAuthorityLive: mint.mintAuthority !== null, freezeAuthorityLive: mint.freezeAuthority !== null }
+      : undefined;
+  const assessment = assessExtensions(assessedExtensions, mintAuthorities);
+  const remediation = projectRenouncements(assessedExtensions, mintAuthorities);
+  return { status: "ok", inspection: { kind: "mint", mint, assessment, remediation } };
+}
+
+/** The headline verdict (severity and 0-to-100 score) of any inspection. */
+export function inspectionVerdict(inspection: Inspection): { severity: Severity; score: number } {
+  if (inspection.kind === "token-account") {
+    return { severity: inspection.assessment.overallSeverity, score: inspection.assessment.score };
+  }
+  return { severity: inspection.assessment.posture.overallSeverity, score: inspection.assessment.posture.score };
+}
+
+/** A human-readable message for any fetch or decode error, shared by all callers. */
+export function formatAccountError(reason: FetchError | DecodeError): string {
+  switch (reason.kind) {
+    case "invalid-address":
+    case "rpc-failed":
+      return formatFetchError(reason);
+    default:
+      return formatDecodeError(reason);
+  }
 }
 
 /**
@@ -83,10 +106,10 @@ export function formatReport(inspection: Inspection): string {
   if (inspection.kind === "token-account") {
     return formatTokenAccountReport(inspection.account, inspection.assessment);
   }
-  return formatMintReport(inspection.mint, inspection.assessment);
+  return formatMintReport(inspection.mint, inspection.assessment, inspection.remediation);
 }
 
-function formatMintReport(mint: DecodedMint, assessment: Assessment): string {
+function formatMintReport(mint: DecodedMint, assessment: Assessment, remediation: Remediation): string {
   const lines: string[] = [];
 
   lines.push("Token-2022 mint inspection");
@@ -120,7 +143,33 @@ function formatMintReport(mint: DecodedMint, assessment: Assessment): string {
     lines.push(line);
   }
 
+  for (const line of formatRemediationLines(remediation)) {
+    lines.push(line);
+  }
+
   return lines.join("\n");
+}
+
+/**
+ * Render the renounce-to-remediate path, when there is one. Each line reads as
+ * "renounce <authority> -> <verdict>", so the report shows not just the current
+ * risk but the concrete path to lower it.
+ */
+function formatRemediationLines(remediation: Remediation): string[] {
+  if (remediation.steps.length === 0) {
+    return [];
+  }
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("Remediation path (renounce a live authority to lower risk):");
+  lines.push(`  current: ${remediation.currentSeverity.toUpperCase()} (risk score ${remediation.currentScore}/100)`);
+  for (const step of remediation.steps) {
+    lines.push(`  renounce ${step.target} -> ${step.afterSeverity.toUpperCase()} (${step.afterScore}/100)`);
+  }
+  if (remediation.allRenounced !== null) {
+    lines.push(`  renounce all of the above -> ${remediation.allRenounced.afterSeverity.toUpperCase()} (${remediation.allRenounced.afterScore}/100)`);
+  }
+  return lines;
 }
 
 function formatTokenAccountReport(account: DecodedTokenAccount, assessment: AccountAssessment): string {

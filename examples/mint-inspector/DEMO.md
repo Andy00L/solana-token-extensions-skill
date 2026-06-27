@@ -1,8 +1,8 @@
-# Mint inspector demo (captured 2026-06-24)
+# Mint inspector demo (captured 2026-06-27)
 
 ![The mint inspector decoding PYUSD](demo.gif)
 
-Real output from the shipped CLI and the `check_extension_compatibility` core, run against Solana mainnet-beta. Supply and authorities are live values that drift over time; the severity model is deterministic. Severity is conditional: a fund-loss-grade extension scores high only while its controlling authority is live, and a 0-to-100 risk score plus a per-finding `fix:` line make the report actionable. Reproduce with `npm install` then the commands below.
+Real output from the shipped CLI, run against Solana mainnet-beta. Supply and authorities are live values that drift over time; the severity model is deterministic. Severity is conditional: a fund-loss-grade extension scores high only while its controlling authority is live, a 0-to-100 risk score plus a per-finding `fix:` line make the report actionable, and a renounce-to-remediate path turns the verdict into a plan. Reproduce with `npm install` then the commands below.
 
 ## 1. A live Token-2022 mint: PayPal USD (PYUSD)
 
@@ -13,6 +13,7 @@ Token-2022 mint inspection
   Address:          2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo
   Program:          token-2022 (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb)
   Decimals:         6
+  Supply (raw):     717397756040620
   Mint authority:   8Jornc27vtAYPkwDzsZVgLQchAYyC8nD7aCNPCDV8Qk2
   Freeze authority: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
 
@@ -23,22 +24,28 @@ Extensions (8):
       delegate: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
   - Transfer Fee [transfer-fee]
       basisPoints: 0
+      maximumFee: 0
       feeConfigAuthority: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
+      withdrawWithheldAuthority: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
   - Confidential Transfer [confidential-transfer]
   - Confidential Transfer Fee [confidential-transfer-fee]
   - Transfer Hook [transfer-hook]
       programId: none
+      authority: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
   - Metadata Pointer [metadata-pointer]
+      metadataAddress: 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo
+      authority: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk
   - Token Metadata [token-metadata]
       name: PayPal USD
       symbol: PYUSD
+      uri: https://token-metadata.paxos.com/pyusd_metadata/prod/solana/pyusd_metadata.json
+      additionalFields: 0
 
 Verdict: CRITICAL (risk score 100/100)
 Integration findings (10):
   [CRITICAL] Permanent delegate can seize or burn any balance (wallet, dex, cex)
       A live permanent delegate can transfer or burn tokens from any account of this mint, and
-      account owners cannot revoke it. It survives a renounced mint and freeze authority and
-      locked liquidity. This is the marquee fund-loss extension.
+      account owners cannot revoke it. This is the marquee fund-loss extension.
       fix: Renounce the permanent delegate (set it to none) unless seizure is an intended, disclosed feature.
       source: skill/supply-controls.md, skill/integration-compatibility.md
   [HIGH] Confidential transfer extension present (wallet, dex, cex)
@@ -76,11 +83,51 @@ Posture:
   CEX listing blockers:  permanent-delegate, confidential-transfer
   DEX routing frictions: permanent-delegate, confidential-transfer, transfer-fee, transfer-hook
   Wallet caveats:        permanent-delegate, confidential-transfer, transfer-hook, freeze-authority
+
+Remediation path (renounce a live authority to lower risk):
+  current: CRITICAL (risk score 100/100)
+  renounce permanent-delegate -> HIGH (100/100)
+  renounce freeze-authority -> CRITICAL (100/100)
+  renounce mint-authority -> CRITICAL (100/100)
+  renounce mint-close-authority -> CRITICAL (100/100)
+  renounce transfer-fee -> CRITICAL (100/100)
+  renounce all of the above -> HIGH (65/100)
 ```
 
-(Findings below MEDIUM trimmed to their headline for space.) PYUSD scores **CRITICAL** because its permanent delegate is live, the marquee fund-seizure capability. The hook extension carries no program, so it is a medium latent caveat, not a hard listing blocker (contrast with an active hook below). All eight extensions are named, including the confidential transfer fee (code 16) that the published `@solana/spl-token` enum does not map. `CRITICAL` is capability, not intent: the report states the power an authority holds and lets you decide whether you trust the controller.
+(Findings below MEDIUM trimmed to their headline for space.) PYUSD scores **CRITICAL** because its permanent delegate is live, the marquee fund-seizure capability. The hook extension carries no program, so it is a medium latent caveat, not a hard listing blocker (contrast with an active hook below). All eight extensions are named, including the confidential transfer fee (code 16) that the published `@solana/spl-token` enum does not map.
 
-## 2. A classic SPL Token mint: USDC
+The **remediation path** is the headline of the tool: it recomputes the verdict for each authority the issuer could renounce. Renouncing the permanent delegate is the single highest-leverage action (it drops the tier from CRITICAL to HIGH), but PYUSD cannot be made CEX-clean by renouncing authorities alone, the confidential-transfer extension has no renounce path, so even renouncing everything floors the mint at HIGH (65/100). The score is a path, not just a label. (Scores saturate at 100, so the severity tier is the primary signal; the all-renounced line shows the true reduction.)
+
+## 2. Triage a whole listing set in one call (inspect_many)
+
+Pass several addresses (or call the `inspect_many` MCP tool) to triage a set at once: a per-mint verdict, worst first, plus an aggregate. Built for "is my exchange's listing set safe."
+
+```
+$ npm run inspect -- 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo \
+    EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
+    CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo \
+    susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X \
+    8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9
+
+Token-2022 batch inspection
+  Addresses:         5
+  Inspected:         5
+  Failed:            0
+  Worst verdict:     CRITICAL
+  With CEX blockers: 2
+  By severity:       critical 1, high 1, medium 2, low 0, info 1
+
+Per address (worst first):
+  [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate, confidential-transfer)
+  [HIGH 60/100] 8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook)
+  [MEDIUM 25/100] susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X (mint; no CEX blockers)
+  [MEDIUM 15/100] CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo (mint; no CEX blockers)
+  [INFO 0/100] EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
+```
+
+PYUSD (live permanent delegate) and BNDRG (active WNS transfer hook) carry CEX listing blockers; sUSD (interest-bearing), BERN (transfer fee), and USDC (classic SPL) do not. Two of five carry a blocker, surfaced in one call.
+
+## 3. A classic SPL Token mint: USDC
 
 ```
 $ npm run inspect -- EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
@@ -89,15 +136,13 @@ Token-2022 mint inspection
   Address:          EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
   Program:          spl-token (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
   Decimals:         6
-  Mint authority:   BJE5MMbqXjVwjAF7oxwPYXnTXDyspzZyt4vwenNw5ruG
-  Freeze authority: 7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar
-
+  ...
 Classic SPL Token mint: no Token-2022 extensions.
 ```
 
-## 3. Vet a planned extension set before building (check_extension_compatibility)
+## 4. Vet a planned extension set before building (check_extension_compatibility)
 
-The same risk engine, applied to a proposed set of extension ids instead of a live mint. Authorities are assumed live (the conservative default before a mint exists). This is the second MCP tool an agent can call. Example: a regulated stablecoin design.
+The same risk engine, applied to a proposed set of extension ids instead of a live mint. Authorities are assumed live (the conservative default before a mint exists). This is the third MCP tool an agent can call. Example: a regulated stablecoin design.
 
 ```
 extensions: transfer-fee, permanent-delegate, default-account-state, pausable, metadata-pointer, token-metadata
@@ -118,4 +163,4 @@ Posture:
   Wallet caveats:        permanent-delegate, default-account-state
 ```
 
-The design is valid (no conflicts), but the permanent delegate makes it CRITICAL and the pause authority is a second listing blocker. The tool surfaces that, with a concrete fix for each, before a single line of mint code is written. Renounce the permanent delegate and the same set drops to a medium posture, exactly the kind of trade-off the conditional model makes visible.
+The design is valid (no conflicts), but the permanent delegate makes it CRITICAL and the pause authority is a second listing blocker. The tool surfaces that, with a concrete fix for each, before a single line of mint code is written.

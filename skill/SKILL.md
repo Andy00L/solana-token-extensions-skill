@@ -109,7 +109,7 @@ Extension families:
 Operate and integrate:
 - [migration.md](migration.md): SPL Token to Token-2022
 - [integration-compatibility.md](integration-compatibility.md): wallet, DEX, explorer, CEX support
-- [mint-inspector.md](mint-inspector.md): decode a live mint and assess its integration risk (CLI and MCP tool)
+- [mint-inspector.md](mint-inspector.md): decode a live mint and assess its integration risk, with a renounce-to-remediate path and batch triage (CLI and three MCP tools)
 - [client-codegen.md](client-codegen.md): TypeScript and Rust client patterns
 - [testing.md](testing.md): extension behavior tests with LiteSVM and Mollusk
 
@@ -194,6 +194,6 @@ Reference:
 This skill ships tested reference code under `examples/` in the source repository:
 - `examples/ts-multi-extension-mint`: a Token-2022 mint that combines transfer fee, metadata pointer, token metadata, and interest-bearing, with LiteSVM tests that run offline.
 - `examples/transfer-hook-allowlist`: a native Rust transfer-hook program with a fail-closed allowlist and a LiteSVM integration test.
-- `examples/mint-inspector`: the read-only mint inspector behind [mint-inspector.md](mint-inspector.md), a CLI and MCP tool with offline tests. See that file for usage.
+- `examples/mint-inspector`: the read-only mint inspector behind [mint-inspector.md](mint-inspector.md), a CLI and three MCP tools (`inspect_mint`, `inspect_many`, `check_extension_compatibility`) with offline tests. See that file for usage.
 
 Run `make verify` in `examples/` to build and test all three.

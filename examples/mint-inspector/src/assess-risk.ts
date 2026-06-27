@@ -70,6 +70,27 @@ export type MintAuthorityLiveness = {
   freezeAuthorityLive: boolean;
 };
 
+// One "what if I renounce this authority" projection: the posture the mint would
+// have if a single currently-live authority were set to none.
+export type RenounceProjection = {
+  // The authority to renounce: an extension id (for example "permanent-delegate")
+  // or a base authority key ("mint-authority", "freeze-authority").
+  target: string;
+  afterSeverity: Severity;
+  afterScore: number;
+};
+
+// A remediation path: the current posture, the projection for each renounceable
+// live authority (highest-leverage first), and the posture if all were renounced.
+export type Remediation = {
+  currentSeverity: Severity;
+  currentScore: number;
+  steps: RenounceProjection[];
+  // The all-at-once projection, present only when more than one step exists (with a
+  // single step the step itself already shows the fully remediated posture).
+  allRenounced: { afterSeverity: Severity; afterScore: number } | null;
+};
+
 type RenouncedOverride = {
   severity: Severity;
   detail: string;
@@ -462,6 +483,73 @@ export function assessExtensions(
   }
 
   return { findings, conflicts, posture: computePosture(findings, conflicts) };
+}
+
+/**
+ * Project how the posture would change if each currently-live, renounceable
+ * authority were renounced one at a time, plus the all-at-once result. It reuses
+ * assessExtensions for every projection, so the path can never diverge from the
+ * verdict. An authority is renounceable when its rule defines a renounced override
+ * (a permanent delegate, a transfer hook, a fee-config authority, a pause
+ * authority, and so on) and it is not already renounced; the base mint and freeze
+ * authorities are included when their liveness is known.
+ */
+export function projectRenouncements(
+  extensions: AssessedExtension[],
+  mintAuthorities?: MintAuthorityLiveness,
+): Remediation {
+  const current = assessExtensions(extensions, mintAuthorities).posture;
+  const steps: RenounceProjection[] = [];
+
+  for (const extension of extensions) {
+    const rule = RISK_RULES[extension.id];
+    // No renounced override means renouncing this authority changes nothing.
+    if (rule?.renounced === undefined || extension.authorityRenounced === true) {
+      continue;
+    }
+    const projected = extensions.map((candidate) =>
+      candidate.id === extension.id ? { ...candidate, authorityRenounced: true } : candidate,
+    );
+    const posture = assessExtensions(projected, mintAuthorities).posture;
+    steps.push({ target: extension.id, afterSeverity: posture.overallSeverity, afterScore: posture.score });
+  }
+
+  if (mintAuthorities?.mintAuthorityLive === true) {
+    const posture = assessExtensions(extensions, { ...mintAuthorities, mintAuthorityLive: false }).posture;
+    steps.push({ target: "mint-authority", afterSeverity: posture.overallSeverity, afterScore: posture.score });
+  }
+  if (mintAuthorities?.freezeAuthorityLive === true) {
+    const posture = assessExtensions(extensions, { ...mintAuthorities, freezeAuthorityLive: false }).posture;
+    steps.push({ target: "freeze-authority", afterSeverity: posture.overallSeverity, afterScore: posture.score });
+  }
+
+  // Lead with the action that most lowers the verdict: lowest projected severity
+  // first, then lowest score, then target id for a deterministic order. Severity is
+  // the primary key because the score saturates at 100, so a renounce that drops the
+  // tier (CRITICAL to HIGH) still leads even when other findings keep the score pinned.
+  steps.sort((left, right) => {
+    const severityDelta = severityRank(left.afterSeverity) - severityRank(right.afterSeverity);
+    if (severityDelta !== 0) {
+      return severityDelta;
+    }
+    if (left.afterScore !== right.afterScore) {
+      return left.afterScore - right.afterScore;
+    }
+    return left.target.localeCompare(right.target);
+  });
+
+  let allRenounced: { afterSeverity: Severity; afterScore: number } | null = null;
+  if (steps.length > 1) {
+    const projectedExtensions = extensions.map((candidate) =>
+      RISK_RULES[candidate.id]?.renounced === undefined ? candidate : { ...candidate, authorityRenounced: true },
+    );
+    const projectedAuthorities =
+      mintAuthorities === undefined ? undefined : { mintAuthorityLive: false, freezeAuthorityLive: false };
+    const posture = assessExtensions(projectedExtensions, projectedAuthorities).posture;
+    allRenounced = { afterSeverity: posture.overallSeverity, afterScore: posture.score };
+  }
+
+  return { currentSeverity: current.overallSeverity, currentScore: current.score, steps, allRenounced };
 }
 
 // Findings for the base mint authorities (mint and freeze), which are not

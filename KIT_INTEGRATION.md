@@ -19,7 +19,7 @@ The core Solana ext skills (solana-dev, solana-game, metaplex, jupiter) are not 
   "name": "Solana Token-2022 (Token Extensions)",
   "type": "skill",
   "domain": "solana-tokens",
-  "description": "Token-2022 mastery: extension compatibility matrix, transfer-hook security audit, confidential-transfer status, fees, metadata, migration, tested TypeScript and Rust reference code, and a read-only mint inspector (CLI plus two MCP tools, inspect_mint and check_extension_compatibility) that decodes a mint or token account and scores its wallet, DEX, and CEX integration risk with conditional severity (fund-loss-grade only while the authority is live), a 0-to-100 score, and a per-finding fix. Delegates core program development to solana-dev.",
+  "description": "Token-2022 mastery: extension compatibility matrix, transfer-hook security audit, confidential-transfer status, fees, metadata, migration, tested TypeScript and Rust reference code, and a read-only mint inspector (CLI plus three MCP tools: inspect_mint, inspect_many, check_extension_compatibility) that decodes a mint or token account and scores its wallet, DEX, and CEX integration risk with conditional severity (fund-loss-grade only while the authority is live), a 0-to-100 score, a per-finding fix, and a renounce-to-remediate path; inspect_many triages a whole listing set in one call. Delegates core program development to solana-dev.",
   "source": "https://github.com/Andy00L/solana-token-extensions-skill",
   "install": {
     "method": "submodule",
@@ -44,22 +44,23 @@ The core Solana ext skills (solana-dev, solana-game, metaplex, jupiter) are not 
 The hub `.claude/skills/SKILL.md` already has a `## Token Extensions` section with a single `token-2022.md` line. Add this skill as a second bullet directly under that line (do not create a new section):
 
 ```markdown
-- [ext/solana-token-extensions/skill/SKILL.md](ext/solana-token-extensions/skill/SKILL.md) - Token-2022 mastery (tested): extension compatibility matrix, transfer-hook security audit, accurate confidential-transfer status (disabled on mainnet since June 2025, issue #657), SPL-to-Token-2022 migration, wallet/DEX/CEX integration, and a read-only mint inspector (CLI + MCP `inspect_mint` and `check_extension_compatibility`). The deeper, tested companion to `token-2022.md`.
+- [ext/solana-token-extensions/skill/SKILL.md](ext/solana-token-extensions/skill/SKILL.md) - Token-2022 mastery (tested): extension compatibility matrix, transfer-hook security audit, accurate confidential-transfer status (disabled on mainnet since June 2025, issue #657), SPL-to-Token-2022 migration, wallet/DEX/CEX integration, and a read-only mint inspector (CLI + 3 MCP tools: `inspect_mint`, `inspect_many`, `check_extension_compatibility`). The deeper, tested companion to `token-2022.md`.
 ```
 
 The skill's own `SKILL.md` router then progressively discloses the focused docs (`overview.md`, `compatibility-matrix.md`, `transfer-hook-security.md`, `confidential-transfer.md`, `mint-inspector.md`, `migration.md`, and the rest), so one hub line is enough.
 
-## 4. MCP tools (inspect_mint, check_extension_compatibility)
+## 4. MCP tools (inspect_mint, inspect_many, check_extension_compatibility)
 
-The skill also ships an MCP server that exposes two read-only tools under `examples/mint-inspector`. An agent in the kit can call them without writing code.
+The skill also ships an MCP server that exposes three read-only tools under `examples/mint-inspector`. An agent in the kit can call them without writing code.
 
 ```bash
 cd .claude/skills/ext/solana-token-extensions/examples/mint-inspector
 npm install
-npm run mcp        # serves both tools over stdio
+npm run mcp        # serves the three tools over stdio
 ```
 
-- `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }`, fetches one account, and returns a text report plus the JSON inspection. It is read only: it never signs or sends.
+- `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }`, fetches one account, and returns a text report (with a renounce-to-remediate path) plus the JSON inspection. It is read only: it never signs or sends.
+- `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up (worst verdict, counts by severity, how many carry a CEX listing blocker), for triaging a listing set in one call.
 - `check_extension_compatibility` takes `{ extensions: string[] }` and returns the conflicts and wallet, DEX, and CEX posture of a planned extension set, with no IO at all.
 
 Register them in the kit's MCP client configuration by pointing the client at that command.
@@ -82,4 +83,4 @@ git push -u origin add-solana-token-extensions
 # Open a PR from your fork to solanabr/solana-ai-kit.
 ```
 
-Map the PR description to the four judging axes: Usefulness (full Token-2022 surface, a use-case decision tree, and a mint inspector plus a compatibility checker an agent can call without writing code), Novelty (compatibility matrix with the runtime-enforced exclusions, transfer-hook security audit, precise confidential-transfer status, and an executable risk engine that decodes codes the JS enum does not yet name), Quality (tested TypeScript and Rust reference code, 60 offline checks, conditional-severity risk scoring grounded in real integrator behavior such as Jupiter's transfer-fee handling, two inaccuracies caught by running the inspector against PYUSD, and a hook example that validates mint ownership and account linkage per Neodyme's checklist), and Fit (submodule plus registry plus hub routing, two MCP tools, delegates to solana-dev).
+Map the PR description to the four judging axes: Usefulness (full Token-2022 surface, a use-case decision tree, a mint inspector with a renounce-to-remediate path, a batch listing-set triage, and a compatibility checker an agent can call without writing code), Novelty (compatibility matrix with the runtime-enforced exclusions, transfer-hook security audit, precise confidential-transfer status, an executable conditional-severity risk engine that decodes codes the JS enum does not yet name, and a renounce-to-remediate projection no other entry ships), Quality (tested TypeScript and Rust reference code, 84 offline checks, conditional-severity risk scoring grounded in real integrator behavior such as Jupiter's transfer-fee handling, two inaccuracies caught by running the inspector against PYUSD, and a hook example with 22 unit tests that validates mint ownership and account linkage per Neodyme's checklist), and Fit (submodule plus registry plus hub routing, three MCP tools, delegates to solana-dev, and answers kit issue #12).
