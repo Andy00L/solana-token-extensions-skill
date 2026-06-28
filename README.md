@@ -16,9 +16,9 @@ A progressively loaded skill for Claude Code and Codex that makes a coding agent
 
 Token-2022 is the 2026 standard for serious tokens (stablecoins, real-world assets, regulated tokens), and its extension surface is where builders trip: init ordering, account sizing, incompatible pairs, and transfer-hook security. Most material on it is scattered or docs-only. This skill consolidates the full surface and ships tested reference code to back every claim.
 
-The mint inspector decoding PayPal USD (PYUSD): a CRITICAL verdict driven by the live permanent delegate, with conditional severity, a 0-to-100 risk score, a per-finding fix, and the confidential transfer fee that the published `@solana/spl-token` enum does not name.
+A short tour from the shipped CLI: the inspector decodes PayPal USD (PYUSD) to a CRITICAL verdict (a live permanent delegate) with a renounce-to-remediate path, scaffolds a correct mint from a legal extension set, then scores the 16-case eval suite at 100%.
 
-![The mint inspector decoding the PYUSD mint](examples/mint-inspector/demo.gif)
+![The mint inspector: decode PYUSD, scaffold a mint, score the eval suite](examples/mint-inspector/demo.gif)
 
 ## 🛠️ What it does
 
