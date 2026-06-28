@@ -196,6 +196,7 @@ async function runCli(argv: string[]): Promise<number> {
       { mintAddresses: parsed.addresses, rpcUrl: parsed.rpcUrl, currentEpoch: epoch ?? undefined },
       fetchMintAccounts,
       DEFAULT_RPC_URL,
+      (address, dataSlice) => fetchRawAccount(address, parsed.rpcUrl, dataSlice),
     );
     if (output.status === "error") {
       if (parsed.json) {

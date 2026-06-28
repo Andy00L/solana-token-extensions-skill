@@ -143,6 +143,7 @@ server.registerTool(
       { mintAddresses: args.mintAddresses, rpcUrl: args.rpcUrl, currentEpoch: currentEpoch ?? undefined },
       fetchMintAccounts,
       DEFAULT_RPC_URL,
+      (address, dataSlice) => fetchRawAccount(address, args.rpcUrl ?? DEFAULT_RPC_URL, dataSlice),
     );
     if (output.status === "error") {
       return {

@@ -2,6 +2,8 @@ import { type AccountInfo, Keypair, PublicKey } from "@solana/web3.js";
 import { LiteSVM } from "litesvm";
 import { describe, expect, it } from "vitest";
 import { type MultiAccountFetcher, MAX_BATCH_SIZE, formatBatchReport, handleInspectMany } from "../src/inspect-many";
+import type { RawAccountFetcher } from "../src/inspect";
+import { WNS_HOOK_PROGRAM, fixtureAccountInfo, fixtureAddress, fixtureByName, loaderAccountInfo } from "../src/mainnet-fixtures";
 import { createClassicMint, createControlsMint, createRichMint, fundedPayer, readAccountInfo } from "./fixtures";
 
 const DEFAULT_RPC = "https://default.example/rpc";
@@ -176,5 +178,43 @@ describe("handleInspectMany", () => {
     expect(report).toContain("Worst verdict:     CRITICAL");
     expect(report).toContain(controlsMint.toBase58());
     expect(report).toContain("CEX blockers: permanent-delegate");
+  });
+
+  it("takes the second hop on an active hook in a batch when a raw reader is supplied (real BNDRG/WNS)", async () => {
+    const bndrg = fixtureByName("BNDRG");
+    if (bndrg === null) {
+      throw new Error("BNDRG fixture missing");
+    }
+    const address = fixtureAddress(bndrg).toBase58();
+    const accounts = new Map<string, AccountInfo<Buffer> | null>([[address, fixtureAccountInfo(bndrg)]]);
+    // A reader backed by the captured WNS program + ProgramData header, so the batch
+    // second hop runs fully offline against real on-chain data.
+    const wnsReader: RawAccountFetcher = async (addr) => {
+      if (addr === WNS_HOOK_PROGRAM.programId) {
+        return loaderAccountInfo(WNS_HOOK_PROGRAM.programBase64, true);
+      }
+      if (addr === WNS_HOOK_PROGRAM.programDataAddress) {
+        return loaderAccountInfo(WNS_HOOK_PROGRAM.programDataBase64, false);
+      }
+      return null;
+    };
+
+    const base = await handleInspectMany({ mintAddresses: [address] }, fetcherFrom(accounts), DEFAULT_RPC);
+    const enriched = await handleInspectMany({ mintAddresses: [address] }, fetcherFrom(accounts), DEFAULT_RPC, wnsReader);
+    expect(base.status).toBe("ok");
+    expect(enriched.status).toBe("ok");
+    if (base.status !== "ok" || enriched.status !== "ok") {
+      return;
+    }
+    const baseVerdict = base.report.verdicts[0];
+    const enrichedVerdict = enriched.report.verdicts[0];
+    if (baseVerdict.status !== "ok" || enrichedVerdict.status !== "ok") {
+      throw new Error("expected ok verdicts");
+    }
+    // The second hop strictly raises the score and adds the upgradeable-hook-program
+    // CEX blocker that the fast batch pass alone does not surface.
+    expect(enrichedVerdict.score).toBeGreaterThan(baseVerdict.score);
+    expect(enrichedVerdict.cexBlockers).toContain("transfer-hook-program");
+    expect(baseVerdict.cexBlockers).not.toContain("transfer-hook-program");
   });
 });

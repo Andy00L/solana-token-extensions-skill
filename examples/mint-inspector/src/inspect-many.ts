@@ -5,8 +5,9 @@
  * these carry a listing blocker" rather than the full report for one mint.
  *
  * The accounts are fetched in one getMultipleAccounts round-trip (chunked at 100),
- * then each is inspected offline with the same inspectAccount core, so a single mint
- * inspects identically whether called alone or in a batch. A per-address fetch or
+ * then each is inspected with the same inspectAccount core (and, when a raw account
+ * reader is supplied, the same second-hop hook-program enrichment), so a mint scores
+ * identically whether inspected alone or in a batch. A per-address fetch or
  * decode failure becomes an error verdict inside the report rather than failing the
  * whole batch: one bad address must not blind the triage. Only a top-level input
  * problem (empty set, over the cap) is a batch-level error.
@@ -14,7 +15,7 @@
 import { type Severity, severityRank } from "./assess-risk";
 import type { DecodeError } from "./decode-mint";
 import type { FetchError, FetchResult } from "./fetch-account";
-import { type Inspection, formatAccountError, inspectAccount, inspectionVerdict } from "./inspect";
+import { type Inspection, type RawAccountFetcher, enrichInspectionWithHookProgram, formatAccountError, inspectAccount, inspectionVerdict } from "./inspect";
 
 // A read-only triage tool: cap the addresses per call so one request cannot fan
 // out into an unbounded number of RPC calls. 50 covers a typical listing set;
@@ -143,6 +144,7 @@ export async function handleInspectMany(
   input: InspectManyInput,
   fetchAccounts: MultiAccountFetcher,
   defaultRpcUrl: string,
+  readRawAccount?: RawAccountFetcher,
 ): Promise<InspectManyOutput> {
   const addresses = normalizeAddresses(input.mintAddresses);
   if (addresses.length === 0) {
@@ -153,31 +155,40 @@ export async function handleInspectMany(
   }
 
   const rpcUrl = input.rpcUrl !== undefined && input.rpcUrl.length > 0 ? input.rpcUrl : defaultRpcUrl;
-  // One round-trip for the whole set, then inspect each result offline.
+  // One round-trip for the whole set, then inspect each result. When a raw reader is
+  // provided, each mint with an ACTIVE transfer hook takes the same second hop as a
+  // single inspect, so a mint scores identically alone or in a batch; without it the
+  // batch stays a fast, fully offline first pass.
   const fetched = await fetchAccounts(addresses, rpcUrl);
-  const verdicts: BatchVerdict[] = addresses.map((address, index) => {
-    const result = fetched[index];
-    if (result === undefined) {
-      return { address, status: "error", reason: { kind: "rpc-failed", detail: "no account returned for this address" } };
-    }
-    if (result.status === "error") {
-      return { address, status: "error", reason: result.reason };
-    }
-    const inspected = inspectAccount(result.address, result.account, input.currentEpoch);
-    if (inspected.status === "error") {
-      return { address, status: "error", reason: inspected.reason };
-    }
-    const verdict = inspectionVerdict(inspected.inspection);
-    return {
-      address,
-      status: "ok",
-      kind: inspected.inspection.kind,
-      severity: verdict.severity,
-      score: verdict.score,
-      cexBlockers: cexBlockersOf(inspected.inspection),
-      inspection: inspected.inspection,
-    };
-  });
+  const verdicts: BatchVerdict[] = await Promise.all(
+    addresses.map(async (address, index): Promise<BatchVerdict> => {
+      const result = fetched[index];
+      if (result === undefined) {
+        return { address, status: "error", reason: { kind: "rpc-failed", detail: "no account returned for this address" } };
+      }
+      if (result.status === "error") {
+        return { address, status: "error", reason: result.reason };
+      }
+      const inspected = inspectAccount(result.address, result.account, input.currentEpoch);
+      if (inspected.status === "error") {
+        return { address, status: "error", reason: inspected.reason };
+      }
+      const inspection =
+        readRawAccount === undefined
+          ? inspected.inspection
+          : await enrichInspectionWithHookProgram(inspected.inspection, readRawAccount);
+      const verdict = inspectionVerdict(inspection);
+      return {
+        address,
+        status: "ok",
+        kind: inspection.kind,
+        severity: verdict.severity,
+        score: verdict.score,
+        cexBlockers: cexBlockersOf(inspection),
+        inspection,
+      };
+    }),
+  );
 
   const sorted = sortVerdicts(verdicts);
   return { status: "ok", report: { aggregate: aggregateVerdicts(sorted), verdicts: sorted } };

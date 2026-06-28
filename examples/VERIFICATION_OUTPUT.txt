@@ -1,6 +1,6 @@
 VERIFICATION OUTPUT (captured 2026-06-28, make verify)
 
-128 checks total: Rust 22, transfer-hook end-to-end 1, TypeScript 105 (ts-multi-extension-mint 7, mint-inspector 98). The mint-inspector total includes a 21-case scored eval suite (npm run evals, 100%, of which 11 are real mainnet mints) and the second-hop hook-program analysis. A CI-gated live mainnet smoke test runs separately (LIVE_RPC=1).
+129 checks total: Rust 22, transfer-hook end-to-end 1, TypeScript 106 (ts-multi-extension-mint 7, mint-inspector 99). The mint-inspector total includes a 21-case scored eval suite (npm run evals, 100%, of which 11 are real mainnet mints) and the second-hop hook-program analysis. A CI-gated live mainnet smoke test runs separately (LIVE_RPC=1).
 
 --- transfer-hook-allowlist (cargo build-sbf + cargo test) ---
 running 22 tests
@@ -25,7 +25,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
       Tests  8 passed (8)
       Tests  4 passed (4)
       Tests  10 passed (10)
-      Tests  6 passed (6)
+      Tests  7 passed (7)
       Tests  1 skipped (1)
       Tests  4 passed (4)
       Tests  16 passed (16)

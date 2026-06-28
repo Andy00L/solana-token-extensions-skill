@@ -77,13 +77,13 @@ Token-2022 batch inspection
 
 Per address (worst first):
   [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate)
-  [HIGH 60/100]      8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook)
+  [HIGH 95/100]      8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook, transfer-hook-program)
   [MEDIUM 25/100]    susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X (mint; no CEX blockers)
   [MEDIUM 15/100]    CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo (mint; no CEX blockers)
   [INFO 0/100]       EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
 ```
 
-Batch triage is a fast first pass (one `getMultipleAccounts`, no per-mint second hop). Run a single inspect on a flagged mint for the second-hop hook-program analysis: it follows BNDRG's active WNS hook and raises it from HIGH 60/100 to HIGH 95/100 once the upgradeable program is read.
+Over RPC the batch takes the same second hop as a single inspect, so BNDRG is flagged HIGH 95/100 with the upgradeable-hook-program blocker; the pure offline handler called without a raw reader stays at the base HIGH 60/100.
 
 ## MCP server
 
@@ -94,7 +94,7 @@ npm run mcp        # serves the tools over stdio
 ```
 
 - `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }` and returns the text report (including the renounce-to-remediate path), the JSON inspection, and a structured verdict for a live mint. When the mint has an active transfer hook, it follows the hook to its program and reports whether the hook is immutable or upgradeable (an upgradeable hook can be swapped for a sell-blocker after an audit).
-- `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up (worst verdict, counts by severity, how many carry a CEX listing blocker), for triaging a listing set.
+- `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up (worst verdict, counts by severity, how many carry a CEX listing blocker), for triaging a listing set. Like `inspect_mint`, it takes the second hop on any mint with an active hook, so an upgradeable hook anywhere in the set is flagged.
 - `check_extension_compatibility` takes `{ extensions: string[] }` (extension ids such as `transfer-hook`, `permanent-delegate`, `scaled-ui-amount`) and returns the conflicts and integration posture of a planned set, before any mint exists.
 - `scaffold_mint` takes `{ extensions: string[], decimals?: number }` and returns an init plan plus TypeScript mint-creation code with the order and sizing correct, refusing any set the runtime would reject at init.
 - `generate_hook_transfer` takes `{ mint: string, hookProgramId: string, decimals?: number }` and returns a correct transfer client for a hooked mint, with the extra accounts resolved against the Execute account set, plus a static classification of the hook's extra-account model.
@@ -107,7 +107,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**98 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against ten captured mainnet mints (PYUSD, USDG, USDC, USDT, wSOL, BONK, JUP, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The second-hop hook-program analysis (immutable vs upgradeable) is tested against the captured WNS hook program. All IO is isolated in `src/fetch-account.ts` and injected in tests: the mint read, plus the hook program and its ProgramData header when a hook is active.
+**99 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against ten captured mainnet mints (PYUSD, USDG, USDC, USDT, wSOL, BONK, JUP, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The second-hop hook-program analysis (immutable vs upgradeable) is tested against the captured WNS hook program. All IO is isolated in `src/fetch-account.ts` and injected in tests: the mint read, plus the hook program and its ProgramData header when a hook is active.
 
 ### Scored eval suite
 

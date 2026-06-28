@@ -4,7 +4,7 @@
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
 [![CI](https://github.com/Andy00L/solana-token-extensions-skill/actions/workflows/verify.yml/badge.svg)](https://github.com/Andy00L/solana-token-extensions-skill/actions/workflows/verify.yml)
-![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-129%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-5-9945FF)
 ![Evals](https://img.shields.io/badge/evals-21%2F21-brightgreen)
@@ -31,7 +31,7 @@ Three ways a Token-2022 mint can take a holder's funds, what a plain extension d
 | The issuer can seize or burn any holder's balance | `permanent delegate: <pubkey>` | **CRITICAL** while the delegate is live, with the exact renounce-to-remediate path that clears it |
 | You can buy, but selling burns almost everything | `transfer fee: <n> bps` | a near-100% fee is a **honeypot** and scores critical even when the rate is locked |
 
-These are not hypotheticals. Run against mainnet, the inspector flags BNDRG's live WNS transfer hook as upgradeable (its bytecode can change after any audit), and PYUSD's live permanent delegate as CRITICAL with the single authority to renounce. Every verdict is reproducible offline: clone, then `cd examples && make verify` (128 of 128 checks green), and `npm run evals` classifies 11 of 11 real mainnet mints correctly.
+These are not hypotheticals. Run against mainnet, the inspector flags BNDRG's live WNS transfer hook as upgradeable (its bytecode can change after any audit), and PYUSD's live permanent delegate as CRITICAL with the single authority to renounce. Every verdict is reproducible offline: clone, then `cd examples && make verify` (129 of 129 checks green), and `npm run evals` classifies 11 of 11 real mainnet mints correctly.
 
 ## 🛠️ What it does
 
@@ -67,7 +67,7 @@ flowchart TD
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
     R --> CMD[["6 commands<br/>scaffold-mint, check-compat,<br/>inspect-mint, audit-hook,<br/>plan-migration, gen-client"]]
-    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 128 checks green"]
+    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 129 checks green"]
     S -.proven by.-> EX
     O -.tool.-> EX
 ```
@@ -85,7 +85,7 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 
 ## 🧪 Tested reference code
 
-Three reference builds run offline and deterministically, no validator and no devnet, for **128 checks total**, plus a CI-gated live mainnet smoke test.
+Three reference builds run offline and deterministically, no validator and no devnet, for **129 checks total**, plus a CI-gated live mainnet smoke test.
 
 ```bash
 cd examples
@@ -96,7 +96,7 @@ make evals      # runs the mint inspector's scored eval suite on its own
 - `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the extensions are present, the fee is withheld on receive and withdrawable, the metadata reads back, an out-of-order initialization is rejected, and the fee is capped and floored correctly. **7 tests, LiteSVM, offline.**
 - `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, mint and account-linkage validation, a per-(mint, destination) allow PDA, and an `AddToAllowlist` instruction gated on the mint authority (the mint is verified as Token-2022-owned before its authority is trusted). `cargo build-sbf` produces a deployable program and `cargo test` runs **22 unit tests**, including adversarial cases: a non-authority signer, a renounced mint authority, a forged (non-Token-2022) mint, an unexpected allow PDA, a mint-sized account passed where a token account is expected, instruction-discriminator non-collision, and account-count boundaries.
 - End to end: `integration/transfer-hook-e2e.ts` loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`. It runs under tsx (`npm run e2e`) because LiteSVM's native addon is stable in a plain process but aborts intermittently inside a vitest worker.
-- `examples/mint-inspector`: the read-only inspector (CLI and five MCP tools). The risk engine, the remediation projection, the batch triage, the compatibility checker, the scaffold generator, and the hook codegen are tested as pure functions; the decoder against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and against a built token account; and the MCP handlers with an injected fetcher. A **21-case scored eval suite** (`npm run evals`, 11 of them real mainnet mints) runs the executable scenarios through the real engine and fails the build on any verdict regression. The inspector also takes a **second hop** on an active hook to flag whether the hook program is upgradeable. **98 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
+- `examples/mint-inspector`: the read-only inspector (CLI and five MCP tools). The risk engine, the remediation projection, the batch triage, the compatibility checker, the scaffold generator, and the hook codegen are tested as pure functions; the decoder against Token-2022 mints built in LiteSVM, against ten captured mainnet mints (PYUSD, USDG, USDC, USDT, wSOL, BONK, JUP, BERN, sUSD, and a WNS hooked NFT) decoded offline, and against a built token account; and the MCP handlers with an injected fetcher. A **21-case scored eval suite** (`npm run evals`, 11 of them real mainnet mints) runs the executable scenarios through the real engine and fails the build on any verdict regression. The inspector also takes a **second hop** on an active hook, in both single inspect and batch triage, to flag whether the hook program is upgradeable. **99 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
 
 A captured run is committed at [examples/VERIFICATION_OUTPUT.txt](examples/VERIFICATION_OUTPUT.txt), and [THREAT_MODEL.md](THREAT_MODEL.md) maps each adversarial test to the threat it closes. Representative prompts with the expected routing and assertions are in [EVALS.md](EVALS.md). A GitHub Actions workflow (`.github/workflows/verify.yml`) runs the suites on every push, plus a best-effort live mainnet smoke test and the on-chain transfer-hook end-to-end scenario.
 
@@ -119,7 +119,7 @@ Token-2022 tooling tends to take one of three shapes: a docs-plus-hook skill, a 
 | Second-hop hook upgrade-authority analysis | yes (immutable vs swappable, names the authority) | no | no | no |
 | Tested Rust transfer hook plus builder (`cargo build-sbf`) | yes (22 unit tests, hardened) | hook only | no | no |
 | Full build plus integrate plus migrate surface | yes | partial (docs) | no (audit-only) | partial (build docs) |
-| Offline deterministic suite | 128 checks plus a 21-case scored eval suite (11 real mainnet mints) plus CI live smoke | hook tests | audit lib plus CI | none |
+| Offline deterministic suite | 129 checks plus a 21-case scored eval suite (11 real mainnet mints) plus CI live smoke | hook tests | audit lib plus CI | none |
 
 A focused mint auditor covers the audit axis well (conditional severity, scoring, fix templates). This skill matches that core and adds agent-callable MCP tools, batch triage, the recomputed remediation projection, a value-aware transfer-fee engine, token-account inspection, a guardrailed scaffold generator, and a tested Rust transfer hook, so it spans the whole build-and-integrate surface rather than one slice of it.
 
@@ -236,7 +236,7 @@ Then add one routing line for it in the kit's hub `.claude/skills/SKILL.md` (and
 
 What this is, and what it deliberately is not, so a verdict is never over-read:
 
-- **Read-only and offline by design.** The inspector fetches at most a handful of accounts (the mint, and, for the second hop, the hook program and its ProgramData header) and never signs or sends. The full 128-check suite runs with no validator and no network; the live mainnet smoke test is the one gated, best-effort exception (`LIVE_RPC=1` in CI).
+- **Read-only and offline by design.** The inspector fetches at most a handful of accounts (the mint, and, for the second hop, the hook program and its ProgramData header) and never signs or sends. The full 129-check suite runs with no validator and no network; the live mainnet smoke test is the one gated, best-effort exception (`LIVE_RPC=1` in CI).
 - **The second hop classifies mutability, not behavior.** It reads the hook program's loader records to report immutable versus upgradeable and to name the upgrade authority. It does not disassemble or fully audit the hook's logic, so an upgradeable hook is flagged as a latent risk, not an accusation.
 - **It scores capability, not intent.** A live permanent delegate is CRITICAL because it can seize funds, which is why a regulated issuer like PYUSD scores CRITICAL too. The verdict is a posture and a checklist, not a claim of malice.
 - **Scoped to Token-2022.** This is a token-extension specialist, not a general transaction-signing gate or an Anchor and CPI source auditor. It decodes deployed mints and accounts; core program development is delegated to `solana-dev-skill`.

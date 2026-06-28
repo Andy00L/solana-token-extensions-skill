@@ -1,6 +1,6 @@
 # Evals: expected behavior on representative prompts
 
-A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 98 offline tests in `examples/mint-inspector`. The rows that resolve to a concrete inspector verdict are also a runnable, scored suite: `examples/mint-inspector/evals.json`, run with `npm run evals` (21 cases, 11 of them over real mainnet mints, through the real risk engine, 100% pass).
+A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 99 offline tests in `examples/mint-inspector`. The rows that resolve to a concrete inspector verdict are also a runnable, scored suite: `examples/mint-inspector/evals.json`, run with `npm run evals` (21 cases, 11 of them over real mainnet mints, through the real risk engine, 100% pass).
 
 | # | Prompt | Routes to | Must assert |
 |---|--------|-----------|-------------|

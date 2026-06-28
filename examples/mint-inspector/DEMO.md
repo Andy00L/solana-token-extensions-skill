@@ -120,13 +120,13 @@ Token-2022 batch inspection
 
 Per address (worst first):
   [CRITICAL 100/100] 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo (mint; CEX blockers: permanent-delegate)
-  [HIGH 60/100] 8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook)
+  [HIGH 95/100] 8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9 (mint; CEX blockers: transfer-hook, transfer-hook-program)
   [MEDIUM 25/100] susdabGDNbhrnCa6ncrYo81u4s9GM8ecK2UwMyZiq4X (mint; no CEX blockers)
   [MEDIUM 15/100] CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo (mint; no CEX blockers)
   [INFO 0/100] EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
 ```
 
-PYUSD (live permanent delegate) and BNDRG (active WNS transfer hook) carry CEX listing blockers; sUSD (interest-bearing), BERN (transfer fee), and USDC (classic SPL) do not. Two of five carry a blocker, surfaced in one call. Batch triage is the fast first pass (one getMultipleAccounts, no per-mint second hop); a single inspect on a flagged mint adds the second-hop hook-program analysis, which raises BNDRG from HIGH 60/100 to HIGH 95/100 once its upgradeable WNS hook is followed (see section 7).
+PYUSD (live permanent delegate) and BNDRG (active WNS transfer hook) carry CEX listing blockers; sUSD (interest-bearing), BERN (transfer fee), and USDC (classic SPL) do not. Two of five carry a blocker, surfaced in one call. Over RPC the batch takes the same second hop as a single inspect, so BNDRG is flagged HIGH 95/100 with the upgradeable-hook-program blocker, not the base HIGH 60/100 a plain extension decode would show (see section 7 for that mint's full report).
 
 ## 3. A classic SPL Token mint: USDC
 
