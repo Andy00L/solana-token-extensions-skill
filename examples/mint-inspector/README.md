@@ -113,11 +113,11 @@ npm test           # tsc --noEmit, then the suite (one file per process, retries
 npm run evals      # run evals.json through the engine; prints a PASS/FAIL table and an accuracy
 ```
 
-`evals.json` turns the executable rows of [EVALS.md](../../EVALS.md) into 21 scored cases (11 of them real mainnet mints): each feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the produced verdict (severity, 0-to-100 score, CEX blockers, conflicts, decoded extensions, or remediation path). A vitest gate (`tests/evals.test.ts`) runs the same suite under `make verify` and fails the build if any verdict regresses. Latest run: 21 of 21 cases pass (100%), 11 of them real mainnet mints.
+`evals.json` turns the executable rows of [EVALS.md](../../EVALS.md) into 21 scored cases (11 of them over real mainnet mints): each feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the produced verdict (severity, 0-to-100 score, CEX blockers, conflicts, decoded extensions, or remediation path). A vitest gate (`tests/evals.test.ts`) runs the same suite under `make verify` and fails the build if any verdict regresses. Latest run: 21 of 21 cases pass (100%), 11 of them over real mainnet mints (10 distinct captured mints; PYUSD is exercised in two cases).
 
 ## Dependency advisories
 
-`npm audit` reports advisories that are all transitive in the pinned January 2026 stack, and they match the other examples in this repo:
+`npm audit` reports advisories that are all transitive in the pinned June 2026 stack, and they match the other examples in this repo:
 
 - `bigint-buffer` and `uuid`: pulled in by `@solana/web3.js` 1.x and `@solana/spl-token` 0.4.x. The advised fix downgrades `@solana/spl-token` to 0.1.8, which removes Token-2022 entirely, so it is not applied.
 - `esbuild` and `vitest`/`@vitest/mocker`: pulled in by the test runner. The `@vitest/mocker` advisory only applies when the Vitest UI server is running; the suite runs headless with `vitest run`, never `--ui`. These do not ship with the tool.
@@ -141,7 +141,7 @@ src/
   cli.ts                 CLI entry (one address, or several for a batch triage)
   mcp-tool.ts            transport-free inspect_mint handler (testable with an injected fetcher)
   mcp-server.ts          thin MCP stdio server exposing the five tools
-  mainnet-fixtures.ts    captured mainnet mint accounts (PYUSD, USDC, BERN, sUSD, BNDRG) for offline decode and evals
+  mainnet-fixtures.ts    captured mainnet mint accounts (PYUSD, USDG, USDC, USDT, wSOL, BONK, JUP, BERN, sUSD, BNDRG) for offline decode and evals
   evals.ts               scored eval suite engine (schema, runner, accuracy)
   evals-cli.ts           npm run evals entry: load evals.json, run, print table + accuracy
 tests/                   pure risk, compatibility, and scaffold tests, LiteSVM decode tests, captured-mint decodes, MCP handler tests, the scored eval gate, a gated live-RPC smoke test

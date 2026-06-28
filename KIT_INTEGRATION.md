@@ -30,7 +30,7 @@ The core Solana ext skills (solana-dev, solana-game, metaplex, jupiter) are not 
   "maintainer": "Andy00L",
   "signal": {
     "stars": null,
-    "last_commit": "2026-06-27",
+    "last_commit": "2026-06-28",
     "reputability": "individual"
   },
   "default_installed": false,

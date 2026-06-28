@@ -238,6 +238,41 @@ Real mainnet mints: 11/11 classified correctly
 
 Each case feeds a planned extension set (with authority liveness) or a captured mainnet mint through the engine and checks the verdict: severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, or the remediation path.
 
+## 7. Follow an active hook to its program (the second hop)
+
+When a mint has an active transfer hook, the inspector takes a second hop: it reads the hook program and its ProgramData header and reports whether the bytecode is immutable or upgradeable, the risk a mint decode alone cannot see. Here it is against BNDRG (a WNS-hooked NFT) on mainnet.
+
+```
+$ npm run inspect -- 8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9
+
+Token-2022 mint inspection
+  Address:          8eDYWjDKmCR5B3UJm95gaG8zCdT5anWakTZG1PyWpBm9
+  Program:          token-2022 (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb)
+  ...
+Extensions (5):
+  - Metadata Pointer, Group Member Pointer, Mint Close Authority, Token Metadata
+  - Transfer Hook [transfer-hook]
+      programId: wns1gDLt8fgLcGhWi5MqAqgXpwEP1JftKE9eZnXS1HM
+      authority:  BDrggjf4JfQ9R7kmYuGzVtWe7s4SZ86aubqsvmuvD1tm
+
+Verdict: HIGH (risk score 95/100)
+Integration findings (8):
+  [HIGH] Transfer hook runs on every transfer (wallet, dex, cex)
+      fix: Audit the hook program and its ExtraAccountMetaList, and simulate a full transfer including the hook before integrating.
+  [HIGH] Transfer hook program is upgradeable (wallet, dex, cex)
+      The active hook program can be replaced by its upgrade authority (yaoYaopKcDsMxnjbT1jBdvYz6XRmjPdAPHczsCraERc). Any review of the
+      hook's current behavior is void once the bytecode is swapped, so an upgradeable hook can turn into a sell-blocker after launch.
+      This is config-invisible: a mint decode alone cannot see it.
+      fix: Confirm the hook program's upgrade authority is renounced (immutable), a burn address, or a trusted multisig before relying on a hook audit.
+  [MEDIUM] Freeze authority is live (accounts can be frozen)
+  [LOW] Mint can be closed at zero supply; [LOW] Mint authority is live; [INFO] x3
+
+Posture:
+  CEX listing blockers:  transfer-hook, transfer-hook-program
+```
+
+(Findings below MEDIUM trimmed to their headline for space.) The first finding is what any tool flags: a hook is set. The second is the second hop: the hook **program** is upgradeable, so a clean audit of today's bytecode is void the moment its upgrade authority swaps it. That is why an upgradeable hook is a CEX listing blocker, and it is exactly what a mint decode alone is blind to.
+
 ## Regenerating this demo
 
 The CLI session shown above is scripted in [`demo.tape`](demo.tape) so the recording is reproducible. Regenerate `demo.gif` with [vhs](https://github.com/charmbracelet/vhs) (which needs `ttyd` and `ffmpeg` on PATH):

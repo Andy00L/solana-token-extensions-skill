@@ -7,18 +7,31 @@
 ![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-5-9945FF)
-![Evals](https://img.shields.io/badge/evals-16%2F16-brightgreen)
-![Stack](https://img.shields.io/badge/stack-January%202026-blue)
+![Evals](https://img.shields.io/badge/evals-21%2F21-brightgreen)
+![Real mints](https://img.shields.io/badge/real%20mainnet%20mints-11%2F11-brightgreen)
+![Stack](https://img.shields.io/badge/stack-June%202026-blue)
 
 > **Choose, build, integrate, and audit SPL Token-2022 mints from one toolset, with tested reference code and a read-only mint inspector an AI agent can call directly.**
 
 A progressively loaded skill for Claude Code and Codex that makes a coding agent an expert in **SPL Token-2022 (Token Extensions)**: choosing and combining extensions, building mints and transfer hooks, migrating from SPL Token, integrating with wallets and DEXs, and auditing transfer-hook security. It runs on its own, and also drops into the [Solana AI Kit](https://github.com/solanabr/solana-ai-kit) next to `solana-dev-skill`, to which it delegates core program work instead of duplicating it.
 
-Token-2022 is the 2026 standard for serious tokens (stablecoins, real-world assets, regulated tokens), and its extension surface is where builders trip: init ordering, account sizing, incompatible pairs, and transfer-hook security. Most material on it is scattered or docs-only. This skill consolidates the full surface and ships tested reference code to back every claim.
+Token-2022 is the 2026 standard for serious tokens (stablecoins, real-world assets, regulated tokens), and its extension surface is where builders trip: init ordering, account sizing, incompatible pairs, and transfer-hook security. Most material on it is scattered or docs-only. This skill consolidates the full surface and ships tested reference code to back every claim: every extension code 0 to 28, every runtime-illegal combination, both mint and token-account level, from choosing a set to listing on an exchange. It is the complete, tested answer to the kit's open request for a Token Extension skill, [issue #12](https://github.com/solanabr/solana-ai-kit/issues/12).
 
 A short tour from the shipped CLI: the inspector decodes PayPal USD (PYUSD) to a CRITICAL verdict (a live permanent delegate) with a renounce-to-remediate path, scaffolds a correct mint from a legal extension set, then scores the 21-case eval suite at 100%.
 
 ![The mint inspector: decode PYUSD, scaffold a mint, score the eval suite](examples/mint-inspector/demo.gif)
+
+## 🎯 What it catches
+
+Three ways a Token-2022 mint can take a holder's funds, what a plain extension decode shows, and what this inspector flags instead:
+
+| The trap | A plain decode shows | This inspector flags |
+|---|---|---|
+| The transfer hook is swapped for a sell-blocker after a clean audit | `transfer hook: <program>` | the hook program is **upgradeable**, names the upgrade authority, and marks it a CEX listing blocker (the second hop most tools never take) |
+| The issuer can seize or burn any holder's balance | `permanent delegate: <pubkey>` | **CRITICAL** while the delegate is live, with the exact renounce-to-remediate path that clears it |
+| You can buy, but selling burns almost everything | `transfer fee: <n> bps` | a near-100% fee is a **honeypot** and scores critical even when the rate is locked |
+
+These are not hypotheticals. Run against mainnet, the inspector flags BNDRG's live WNS transfer hook as upgradeable (its bytecode can change after any audit), and PYUSD's live permanent delegate as CRITICAL with the single authority to renounce. Every verdict is reproducible offline: clone, then `cd examples && make verify` (128 of 128 checks green), and `npm run evals` classifies 11 of 11 real mainnet mints correctly.
 
 ## 🛠️ What it does
 
@@ -145,7 +158,7 @@ The installer copies `skill/*` into `~/.claude/skills/solana-token-extensions/`.
 
 Repo-relative links inside the copied agents and commands are rewritten to the installed absolute paths, so they resolve outside the repo. If `solana-dev-skill` is not already installed, the installer offers to clone it (this skill delegates core program work to it).
 
-## 🧱 Default stack (January 2026)
+## 🧱 Default stack (June 2026)
 
 - Program: `spl-token-2022`, accessed through anchor-spl `token_interface` so code serves both SPL Token and Token-2022 mints.
 - Client: `@solana/kit` for transactions and codecs, `@solana/spl-token` for extension instruction builders. The split is deliberate: new client code in the docs uses `@solana/kit`, while the tested inspector stays on `@solana/spl-token` because its typed mint and account unpack helpers and `ExtensionType` codecs are the maintained source of truth for decoding a live mint (the `@solana/kit` line does not yet expose equivalents), so decoding is verified against the program's own getters rather than reimplemented.
@@ -218,6 +231,16 @@ git submodule add https://github.com/Andy00L/solana-token-extensions-skill \
 ```
 
 Then add one routing line for it in the kit's hub `.claude/skills/SKILL.md` (and, optionally, a catalog entry in `.claude/skills/skill-registry.json`). See [KIT_INTEGRATION.md](KIT_INTEGRATION.md) for the exact hub line, the optional registry entry, and the fork-and-PR steps.
+
+## 🔒 Scope and limits
+
+What this is, and what it deliberately is not, so a verdict is never over-read:
+
+- **Read-only and offline by design.** The inspector fetches at most a handful of accounts (the mint, and, for the second hop, the hook program and its ProgramData header) and never signs or sends. The full 128-check suite runs with no validator and no network; the live mainnet smoke test is the one gated, best-effort exception (`LIVE_RPC=1` in CI).
+- **The second hop classifies mutability, not behavior.** It reads the hook program's loader records to report immutable versus upgradeable and to name the upgrade authority. It does not disassemble or fully audit the hook's logic, so an upgradeable hook is flagged as a latent risk, not an accusation.
+- **It scores capability, not intent.** A live permanent delegate is CRITICAL because it can seize funds, which is why a regulated issuer like PYUSD scores CRITICAL too. The verdict is a posture and a checklist, not a claim of malice.
+- **Scoped to Token-2022.** This is a token-extension specialist, not a general transaction-signing gate or an Anchor and CPI source auditor. It decodes deployed mints and accounts; core program development is delegated to `solana-dev-skill`.
+- **Confidential balances stay opaque.** The inspector reads the confidential-transfer configuration and authorities, never the encrypted amounts, which require the auditor key.
 
 ## 🤝 Contributing
 

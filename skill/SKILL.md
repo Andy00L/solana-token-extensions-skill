@@ -40,7 +40,7 @@ Use this skill to choose, build, integrate, and audit Token-2022 mints. It owns 
 - Base program testing: [testing.md](../solana-dev/testing.md)
 - Base security checklist: [security.md](../solana-dev/security.md)
 
-## Stack Decisions (January 2026)
+## Stack Decisions (June 2026)
 
 1. Program: SPL Token-2022, program id `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`. Prefer the anchor-spl `token_interface` so code works for both SPL Token and Token-2022 mints.
 2. Client: `@solana/kit` for transactions and codecs, `@solana/spl-token` for extension instruction builders. Unpack mint extensions with the typed helpers, never raw bytes.
