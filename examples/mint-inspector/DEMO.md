@@ -234,9 +234,10 @@ Each case feeds a planned extension set (with authority liveness) or a captured 
 
 ## Regenerating this demo
 
-The CLI session shown above is scripted in [`demo.tape`](demo.tape) so the recording is reproducible. Regenerate `demo.gif` with [vhs](https://github.com/charmbracelet/vhs):
+The CLI session shown above is scripted in [`demo.tape`](demo.tape) so the recording is reproducible. Regenerate `demo.gif` with [vhs](https://github.com/charmbracelet/vhs) (which needs `ttyd` and `ffmpeg` on PATH):
 
 ```bash
-cd examples/mint-inspector
-vhs demo.tape    # writes demo.gif
+cd examples && make demo      # one command: checks for vhs, then renders mint-inspector/demo.gif
+# or directly:
+cd examples/mint-inspector && vhs demo.tape
 ```

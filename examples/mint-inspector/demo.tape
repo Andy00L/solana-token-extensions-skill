@@ -1,5 +1,6 @@
 # demo.tape: reproducible recording for demo.gif.
 # Render with: vhs demo.tape   (https://github.com/charmbracelet/vhs)
+# or, from the examples directory: make demo
 # Requires vhs, ttyd, and ffmpeg on PATH, and `npm install` already run in this
 # directory. Step 1 reaches mainnet over the default RPC; steps 2 to 4 are offline.
 
