@@ -230,6 +230,48 @@
         "conflictInitRejected": true,
         "conflictTitleContains": "requires confidential transfer"
       }
+    },
+    {
+      "id": "usdg-paxos-stablecoin-critical",
+      "prompt": "Inspect USDG (Global Dollar). Is it safe for an exchange to list?",
+      "rationale": "A second real Paxos regulated stablecoin (Token-2022): the inspector decodes the full extension set including code 16 and flags it CRITICAL by configuration from a live permanent delegate, like PYUSD. Proves the decoder generalizes beyond a single fixture.",
+      "input": { "kind": "fixture", "fixture": "USDG" },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "noUnrecognized": true,
+        "decodedExtensionsInclude": ["confidential-transfer-fee"],
+        "cexBlockersInclude": ["permanent-delegate"],
+        "cexBlockersExclude": ["confidential-transfer", "transfer-hook"]
+      }
+    },
+    {
+      "id": "usdt-classic-clean",
+      "prompt": "Inspect USDT. Does the inspector clear a blue-chip classic SPL token?",
+      "rationale": "USDT is a classic SPL Token mint with no Token-2022 extensions; a credible inspector must not raise a false positive on the most-traded tokens.",
+      "input": { "kind": "fixture", "fixture": "USDT" },
+      "expect": { "severity": "info", "score": 0, "cexListable": true, "decodedExtensionsEqual": [] }
+    },
+    {
+      "id": "wsol-classic-clean",
+      "prompt": "Inspect Wrapped SOL. Any Token-2022 extension risk?",
+      "rationale": "Wrapped SOL is a classic SPL mint with no extensions; it must clear cleanly.",
+      "input": { "kind": "fixture", "fixture": "WSOL" },
+      "expect": { "severity": "info", "score": 0, "cexListable": true, "decodedExtensionsEqual": [] }
+    },
+    {
+      "id": "bonk-classic-clean",
+      "prompt": "Inspect BONK. Is it a Token-2022 mint with risky extensions?",
+      "rationale": "BONK is a classic SPL mint with no Token-2022 extensions; a false positive here would discredit the tool.",
+      "input": { "kind": "fixture", "fixture": "BONK" },
+      "expect": { "severity": "info", "score": 0, "cexListable": true, "decodedExtensionsEqual": [] }
+    },
+    {
+      "id": "jup-classic-clean",
+      "prompt": "Inspect JUP. Any extension-level listing blocker?",
+      "rationale": "JUP is a classic SPL mint with no Token-2022 extensions; it must clear with no blocker.",
+      "input": { "kind": "fixture", "fixture": "JUP" },
+      "expect": { "severity": "info", "score": 0, "cexListable": true, "decodedExtensionsEqual": [] }
     }
   ]
 }

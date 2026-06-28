@@ -37,6 +37,15 @@ jobs:
         working-directory: examples/mint-inspector
         run: npm run evals
 
+      - name: Mint inspector (determinism gate)
+        working-directory: examples/mint-inspector
+        # The risk engine is pure, so the eval verdicts must be byte-identical across
+        # runs. Run the suite twice and diff; any divergence fails the build.
+        run: |
+          npm run evals -- --json > /tmp/evals-run1.json
+          npm run evals -- --json > /tmp/evals-run2.json
+          diff /tmp/evals-run1.json /tmp/evals-run2.json && echo "deterministic: byte-identical eval output across two runs"
+
       - name: Mint inspector (live mainnet smoke, best-effort)
         working-directory: examples/mint-inspector
         run: npx vitest run tests/live-smoke.test.ts
@@ -50,14 +59,13 @@ jobs:
         working-directory: examples/ts-multi-extension-mint
         run: npm ci && npm test
 
-  # Best-effort: the transfer-hook end-to-end scenario needs the Solana platform
-  # tools (cargo build-sbf). Marked continue-on-error so a flaky toolchain install
-  # never reds the badge; the authoritative run is local `make verify`, recorded in
-  # examples/VERIFICATION_OUTPUT.txt. Once this job is observed green on main, the
-  # continue-on-error can be removed to make the on-chain e2e a required check.
+  # Required check: the transfer-hook end-to-end scenario needs the Solana platform
+  # tools (cargo build-sbf). It builds the hook and runs the full `make verify`,
+  # including the on-chain blocked-then-allowed transfer. continue-on-error was
+  # removed once this job was observed green on every main run since 2026-06-27; the
+  # committed examples/VERIFICATION_OUTPUT.txt records a full local run.
   hook-e2e:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

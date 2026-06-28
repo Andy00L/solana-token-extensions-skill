@@ -12,8 +12,8 @@
  */
 import type { DecodeError } from "./decode-mint";
 import { describeError } from "./describe-error";
-import { type FetchError, fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts, formatFetchError } from "./fetch-account";
-import { formatDecodeError, formatReport, inspectAccount } from "./inspect";
+import { type FetchError, fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts, fetchRawAccount, formatFetchError } from "./fetch-account";
+import { enrichInspectionWithHookProgram, formatDecodeError, formatReport, inspectAccount } from "./inspect";
 import { formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
 import { formatGenerateReport, generateMintScaffold } from "./generate-mint";
 import { formatHookCodegen, generateHookTransferCodegen } from "./hook-codegen";
@@ -226,10 +226,16 @@ async function runCli(argv: string[]): Promise<number> {
     return 1;
   }
 
+  // Second hop: when the mint has an active transfer hook, follow it to the hook
+  // program and assess whether its bytecode is immutable or upgradeable.
+  const inspection = await enrichInspectionWithHookProgram(result.inspection, (address, dataSlice) =>
+    fetchRawAccount(address, parsed.rpcUrl, dataSlice),
+  );
+
   if (parsed.json) {
-    process.stdout.write(`${JSON.stringify(result.inspection, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(inspection, null, 2)}\n`);
   } else {
-    process.stdout.write(`${formatReport(result.inspection)}\n`);
+    process.stdout.write(`${formatReport(inspection)}\n`);
   }
   return 0;
 }

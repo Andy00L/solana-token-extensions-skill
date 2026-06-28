@@ -42,7 +42,7 @@ cd examples/mint-inspector
 npm run evals      # prints a PASS/FAIL table and an accuracy, exits non-zero on any failure
 ```
 
-`evals.json` holds 16 cases (planned extension sets with authority liveness, and captured mainnet mints) checked for severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, and the remediation path. A vitest gate runs the same suite under `make verify`, so a verdict regression fails the build. Latest run: 16 of 16 (100%).
+`evals.json` holds 21 cases (planned extension sets with authority liveness, and captured mainnet mints, 11 of which are real on-chain) checked for severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, and the remediation path. A vitest gate runs the same suite under `make verify`, so a verdict regression fails the build. Latest run: 21 of 21 (100%), 11 of them real mainnet mints.
 
 ## MCP server
 
@@ -63,4 +63,14 @@ Register them in an MCP client by pointing the client at that command.
 - `generate_hook_transfer` takes `{ mint: string, hookProgramId: string, decimals?: number }` and returns a correct transfer client for a hooked mint, with the extra accounts resolved against the Execute account set, plus a static classification of the hook's extra-account model.
 
 ## How it works
-The decoder uses the typed `@solana/spl-token` getters, never raw byte offsets. The risk rules are a direct, executable form of [compatibility-matrix.md](compatibility-matrix.md) and [integration-compatibility.md](integration-compatibility.md): every rule cites the document it came from, so the tool and the written guidance stay in sync. Severity also weighs a transfer fee by size (a near-100% fee is a sell-blocking honeypot even when the rate is locked) and resolves the active versus a scheduled fee under the two-epoch rule. The same engine backs `scaffold_mint`, which vets a set and emits ordered, correctly-sized mint code. The core is pure and tested offline with LiteSVM-built mints; the only IO is a single `getAccountInfo` call.
+The decoder uses the typed `@solana/spl-token` getters, never raw byte offsets. The risk rules are a direct, executable form of [compatibility-matrix.md](compatibility-matrix.md) and [integration-compatibility.md](integration-compatibility.md): every rule cites the document it came from, so the tool and the written guidance stay in sync. Severity also weighs a transfer fee by size (a near-100% fee is a sell-blocking honeypot even when the rate is locked) and resolves the active versus a scheduled fee under the two-epoch rule. The same engine backs `scaffold_mint`, which vets a set and emits ordered, correctly-sized mint code. The decode and risk core is pure and tested offline with LiteSVM-built mints. The base inspection is one `getAccountInfo`; when a mint carries an **active transfer hook**, the inspector takes a second hop, reading the hook program and its ProgramData header to report whether the hook's bytecode is immutable or upgradeable. An upgradeable hook can be swapped for a sell-blocker after an audit, the single largest latent risk a mint decode alone is blind to; the verdict names the upgrade authority rather than declaring the hook safe. All IO stays in `src/fetch-account.ts`, offline and key-free.
+
+## Limitations
+
+The inspector reads a mint's on-chain configuration, not its runtime behavior, so be explicit about what it does not do:
+
+- **It reports hook mutability, not hook logic.** The second hop reads whether the hook program is immutable or upgradeable (and by which authority), but it does not analyze the hook's bytecode; a malicious or later-upgraded hook can still implement a sell-blocker in code no decode reveals. Use `/audit-transfer-hook` and [transfer-hook-security.md](transfer-hook-security.md) for the logic review.
+- **It is a point-in-time read.** Authorities can change after inspection: where a higher authority exists, a currently-null authority can be re-granted. Re-inspect before relying on a verdict.
+- **It does not measure market or off-chain risk:** liquidity, holder concentration, team or social trust, oracle manipulation, or rugs driven by a privileged off-chain system.
+- **Confidential balances are opaque by design.** The inspector flags the extension and the compliance constraint but cannot see confidential amounts.
+- **It is offline and deterministic on purpose**: the base mint read, plus the hook program and its ProgramData header when a hook is active (the second hop). It does not simulate a transfer, query an indexer, or scan transaction history. That keeps it fast, reproducible, and key-free, at the cost of dynamic detection.

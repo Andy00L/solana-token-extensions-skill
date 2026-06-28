@@ -340,6 +340,9 @@ export type EvalSuiteReport = {
   failed: number;
   // Passed cases as a percentage with one decimal place (for example 100 or 94.4).
   accuracy: number;
+  // Breakdown for cases backed by a captured mainnet mint (the "fixture" input kind),
+  // so the suite reports an accuracy on real on-chain data, not only synthetic sets.
+  realMint: { passed: number; total: number };
   results: EvalCaseResult[];
 };
 
@@ -362,7 +365,10 @@ export function runEvalSuite(suite: EvalSuite): EvalSuiteReport {
   const failed = total - passed;
   // One decimal place keeps a partial pass readable (94.4%) without float noise.
   const accuracy = total === 0 ? 0 : Math.round((passed / total) * 1000) / 10;
-  return { total, passed, failed, accuracy, results };
+  // Real mainnet mints are the "fixture" cases, decoded from captured on-chain bytes.
+  const realMintResults = results.filter((result, index) => suite.cases[index].input.kind === "fixture");
+  const realMint = { passed: realMintResults.filter((result) => result.ok).length, total: realMintResults.length };
+  return { total, passed, failed, accuracy, realMint, results };
 }
 
 function arraysEqual(left: string[], right: string[]): boolean {

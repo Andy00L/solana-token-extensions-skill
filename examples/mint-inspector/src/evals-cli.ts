@@ -49,6 +49,9 @@ function formatReport(report: EvalSuiteReport): string {
   }
   lines.push("");
   lines.push(`Accuracy: ${report.passed}/${report.total} cases passed (${report.accuracy}%)`);
+  if (report.realMint.total > 0) {
+    lines.push(`Real mainnet mints: ${report.realMint.passed}/${report.realMint.total} classified correctly`);
+  }
   return lines.join("\n");
 }
 

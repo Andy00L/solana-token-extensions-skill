@@ -15,9 +15,11 @@ import {
   assessTokenAccount,
   controllingAuthorityKey,
   projectRenouncements,
+  withAdditionalFindings,
 } from "./assess-risk";
 import { type DecodeError, type DecodedExtension, type DecodedMint, type DecodedTokenAccount, decodeTokenEntity } from "./decode-mint";
 import { type FetchError, formatFetchError } from "./fetch-account";
+import { assessHookProgram, buildHookProgramFinding, decodeProgramDataAddress } from "./hook-program";
 
 export type Inspection =
   | { kind: "mint"; mint: DecodedMint; assessment: Assessment; remediation: Remediation }
@@ -62,6 +64,50 @@ export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buff
   const assessment = assessExtensions(assessedExtensions, mintAuthorities);
   const remediation = projectRenouncements(assessedExtensions, mintAuthorities);
   return { status: "ok", inspection: { kind: "mint", mint, assessment, remediation } };
+}
+
+// An injected reader for second-hop accounts (the hook program and its ProgramData),
+// so the enrichment stays testable offline. dataSlice fetches only the bytes needed.
+export type RawAccountFetcher = (
+  address: string,
+  dataSlice?: { offset: number; length: number },
+) => Promise<AccountInfo<Buffer> | null>;
+
+// The ProgramData header: u32 tag + u64 slot + Option<Pubkey> = 45 bytes. Fetching
+// only this avoids pulling the hook program's full bytecode. Source: hook-program.ts.
+const PROGRAM_DATA_HEADER_SLICE = { offset: 0, length: 45 } as const;
+
+/**
+ * Second-hop enrichment: when a mint carries an ACTIVE transfer hook (a program is
+ * set), follow the pointer to read the hook program's mutability (immutable, or
+ * upgradeable by an authority that could swap the bytecode) and fold that finding
+ * into the assessment, recomputing the posture. A mint with no hook, or a hook with
+ * no program, is returned unchanged. Offline and deterministic: at most two
+ * getAccountInfo reads at stored (not guessed) addresses; an unreadable account
+ * degrades to a caveat, never a throw or a silent pass.
+ */
+export async function enrichInspectionWithHookProgram(
+  inspection: Inspection,
+  fetchAccount: RawAccountFetcher,
+): Promise<Inspection> {
+  if (inspection.kind !== "mint") {
+    return inspection;
+  }
+  const hook = inspection.mint.extensions.find((extension) => extension.id === "transfer-hook");
+  const hookProgramId = hook?.detail.programId;
+  if (hookProgramId === undefined || hookProgramId === "none") {
+    return inspection;
+  }
+  const programAccount = await fetchAccount(hookProgramId);
+  if (programAccount === null) {
+    const finding = buildHookProgramFinding({ kind: "undecodable", reason: `could not read hook program ${hookProgramId}` });
+    return { ...inspection, assessment: withAdditionalFindings(inspection.assessment, [finding]) };
+  }
+  const programDataAddress = decodeProgramDataAddress(programAccount);
+  const programDataAccount =
+    programDataAddress === null ? null : await fetchAccount(programDataAddress, PROGRAM_DATA_HEADER_SLICE);
+  const finding = buildHookProgramFinding(assessHookProgram(programAccount, programDataAccount));
+  return { ...inspection, assessment: withAdditionalFindings(inspection.assessment, [finding]) };
 }
 
 /** The headline verdict (severity and 0-to-100 score) of any inspection. */

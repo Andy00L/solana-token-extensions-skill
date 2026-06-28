@@ -5,6 +5,10 @@ import { inspectAccount, inspectionSummary, isLiveAuthorityKey } from "../src/in
 import { type MultiAccountFetcher, batchSummary, handleInspectMany } from "../src/inspect-many";
 import { REAL_MINT_FIXTURES, fixtureAccountInfo, fixtureAddress, fixtureByName } from "../src/mainnet-fixtures";
 
+// The five mints the batch tests pin to, so adding more captured fixtures does not
+// shift the batch aggregate assertions below.
+const ORIGINAL_BATCH = new Set(["PYUSD", "USDC", "BERN", "sUSD", "BNDRG"]);
+
 // A fetcher backed by the captured mainnet fixtures, so a batch can be triaged
 // fully offline against real on-chain data.
 function realFixtureFetcher(): MultiAccountFetcher {
@@ -169,7 +173,7 @@ describe("inspectAccount over captured mainnet mints (offline, deterministic)", 
 
   it("triages all five captured mainnet mints in one batch, worst first", async () => {
     const output = await handleInspectMany(
-      { mintAddresses: REAL_MINT_FIXTURES.map((fixture) => fixture.address) },
+      { mintAddresses: REAL_MINT_FIXTURES.filter((fixture) => ORIGINAL_BATCH.has(fixture.name)).map((fixture) => fixture.address) },
       realFixtureFetcher(),
       "https://default.example/rpc",
     );
@@ -247,7 +251,7 @@ describe("structured summaries (agent-consumable verdicts)", () => {
 
   it("projects a batch report to a compact summary with a flat verdict list", async () => {
     const output = await handleInspectMany(
-      { mintAddresses: REAL_MINT_FIXTURES.map((fixture) => fixture.address) },
+      { mintAddresses: REAL_MINT_FIXTURES.filter((fixture) => ORIGINAL_BATCH.has(fixture.name)).map((fixture) => fixture.address) },
       realFixtureFetcher(),
       "https://default.example/rpc",
     );

@@ -13,7 +13,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { describeError } from "./describe-error";
-import { fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts } from "./fetch-account";
+import { fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts, fetchRawAccount } from "./fetch-account";
 import { formatAccountError, formatReport, inspectionSummary } from "./inspect";
 import { handleInspectMint } from "./mcp-tool";
 import { batchSummary, formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
@@ -106,6 +106,7 @@ server.registerTool(
       { mintAddress: args.mintAddress, rpcUrl: args.rpcUrl, currentEpoch: currentEpoch ?? undefined },
       fetchMintAccount,
       DEFAULT_RPC_URL,
+      fetchRawAccount,
     );
     if (output.status === "error") {
       return {

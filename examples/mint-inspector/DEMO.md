@@ -226,8 +226,14 @@ Mint inspector eval suite (offline, deterministic)
   [PASS] bern-transfer-fee-decode
   [PASS] susd-interest-bearing-decode
   [PASS] confidential-mint-burn-requires-confidential-transfer
+  [PASS] usdg-paxos-stablecoin-critical
+  [PASS] usdt-classic-clean
+  [PASS] wsol-classic-clean
+  [PASS] bonk-classic-clean
+  [PASS] jup-classic-clean
 
-Accuracy: 16/16 cases passed (100%)
+Accuracy: 21/21 cases passed (100%)
+Real mainnet mints: 11/11 classified correctly
 ```
 
 Each case feeds a planned extension set (with authority liveness) or a captured mainnet mint through the engine and checks the verdict: severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, or the remediation path.

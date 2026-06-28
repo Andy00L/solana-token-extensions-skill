@@ -4,7 +4,7 @@
 ![Solana](https://img.shields.io/badge/Solana-Token--2022-9945FF)
 ![Agent skill](https://img.shields.io/badge/Claude_Code%20%2F%20Codex-skill-orange)
 [![CI](https://github.com/Andy00L/solana-token-extensions-skill/actions/workflows/verify.yml/badge.svg)](https://github.com/Andy00L/solana-token-extensions-skill/actions/workflows/verify.yml)
-![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)
 ![Build](https://img.shields.io/badge/cargo%20build--sbf-passing-brightgreen)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-5-9945FF)
 ![Evals](https://img.shields.io/badge/evals-16%2F16-brightgreen)
@@ -16,7 +16,7 @@ A progressively loaded skill for Claude Code and Codex that makes a coding agent
 
 Token-2022 is the 2026 standard for serious tokens (stablecoins, real-world assets, regulated tokens), and its extension surface is where builders trip: init ordering, account sizing, incompatible pairs, and transfer-hook security. Most material on it is scattered or docs-only. This skill consolidates the full surface and ships tested reference code to back every claim.
 
-A short tour from the shipped CLI: the inspector decodes PayPal USD (PYUSD) to a CRITICAL verdict (a live permanent delegate) with a renounce-to-remediate path, scaffolds a correct mint from a legal extension set, then scores the 16-case eval suite at 100%.
+A short tour from the shipped CLI: the inspector decodes PayPal USD (PYUSD) to a CRITICAL verdict (a live permanent delegate) with a renounce-to-remediate path, scaffolds a correct mint from a legal extension set, then scores the 21-case eval suite at 100%.
 
 ![The mint inspector: decode PYUSD, scaffold a mint, score the eval suite](examples/mint-inspector/demo.gif)
 
@@ -54,7 +54,7 @@ flowchart TD
     R -->|core program dev| CORE[["solana-dev-skill<br/>Anchor, Pinocchio, IDL"]]
     R --> AG[["4 agents<br/>architect, engineer,<br/>auditor, integration"]]
     R --> CMD[["6 commands<br/>scaffold-mint, check-compat,<br/>inspect-mint, audit-hook,<br/>plan-migration, gen-client"]]
-    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 114 checks green"]
+    B -.proven by.-> EX["examples/<br/>TS mint + Rust hook + inspector<br/>make verify: 128 checks green"]
     S -.proven by.-> EX
     O -.tool.-> EX
 ```
@@ -66,12 +66,13 @@ The agent reads `SKILL.md` first, then loads only the focused file a task needs.
 - **A read-only mint inspector**, as a CLI and five MCP tools, that decodes any mint or token account and reports wallet, DEX, and exchange risk with a 0-to-100 score, a verdict tier, and a fix per finding. `inspect_mint` reports one mint plus a renounce-to-remediate path, `inspect_many` triages a whole listing set in one call, `check_extension_compatibility` vets a planned set before any code exists, `scaffold_mint` generates a correct mint from a legal set (refusing any set the runtime would reject at init), and `generate_hook_transfer` emits a transfer client for a hooked mint with its extra accounts resolved against the Execute account set.
 - **Corrections most references get wrong**, each verified against a primary source: confidential transfers are **re-enabled on mainnet** (2026-06-04, read from the on-chain `reenable_zk_elgamal_proof_program` gate); the runtime-enforced incompatible pairs (such as Scaled UI Amount with Interest-Bearing) and the required-companion rules; and every extension code 0 to 28 is named, including codes the published `@solana/spl-token` enum omits (so PYUSD decodes completely instead of showing "unrecognized").
 - **An executable risk engine**, not just prose. It scores a fund-loss-grade extension high only while its controlling authority is live (the live-versus-renounced model Jupiter uses to gate transfer-fee tokens and Neodyme prescribes for hooks), weighs a transfer fee by size to flag a near-100% fee as a sell-blocking honeypot even when the rate is locked, resolves the active versus a scheduled fee under the two-epoch rule, and turns a verdict into a remediation path (CRITICAL today to MEDIUM once the permanent delegate is renounced).
+- **Second-hop hook analysis.** Most tools see only that a transfer hook is set. This one follows the pointer: when a hook is active it reads the hook program and decodes whether its bytecode is immutable or upgradeable by an authority, the single largest latent risk a mint decode alone is blind to (an upgradeable hook can be swapped for a sell-blocker after an audit). It stays offline, a couple of extra reads at stored addresses, and names the upgrade authority rather than giving a binary safe/unsafe verdict.
 - **Build, not only audit.** `scaffold_mint` turns a legal extension set into correct, correctly-ordered, correctly-sized mint code and refuses any set the runtime would reject at init; the transfer-hook codegen resolves the extra accounts against the Execute account set, the fix for the most common hook-integration bug.
 - **Proven by running it.** Two real inaccuracies were caught and corrected by running the inspector against PYUSD: a confidential-transfer-with-hook pair wrongly flagged as incompatible (PYUSD carries both), and an extension code the inspector now names instead of dropping.
 
 ## 🧪 Tested reference code
 
-Three reference builds run offline and deterministically, no validator and no devnet, for **114 checks total**, plus a CI-gated live mainnet smoke test.
+Three reference builds run offline and deterministically, no validator and no devnet, for **128 checks total**, plus a CI-gated live mainnet smoke test.
 
 ```bash
 cd examples
@@ -82,7 +83,7 @@ make evals      # runs the mint inspector's scored eval suite on its own
 - `examples/ts-multi-extension-mint`: builds one mint combining transfer fee, metadata pointer, token metadata, and interest-bearing, then asserts the extensions are present, the fee is withheld on receive and withdrawable, the metadata reads back, an out-of-order initialization is rejected, and the fee is capped and floored correctly. **7 tests, LiteSVM, offline.**
 - `examples/transfer-hook-allowlist`: a native Rust transfer hook with a fail-closed allowlist, the transferring-flag gate, mint and account-linkage validation, a per-(mint, destination) allow PDA, and an `AddToAllowlist` instruction gated on the mint authority (the mint is verified as Token-2022-owned before its authority is trusted). `cargo build-sbf` produces a deployable program and `cargo test` runs **22 unit tests**, including adversarial cases: a non-authority signer, a renounced mint authority, a forged (non-Token-2022) mint, an unexpected allow PDA, a mint-sized account passed where a token account is expected, instruction-discriminator non-collision, and account-count boundaries.
 - End to end: `integration/transfer-hook-e2e.ts` loads the compiled hook, creates a Token-2022 mint that uses it, and proves a real transfer is **blocked** when the destination is not allowlisted and **allowed** after `AddToAllowlist`. It runs under tsx (`npm run e2e`) because LiteSVM's native addon is stable in a plain process but aborts intermittently inside a vitest worker.
-- `examples/mint-inspector`: the read-only inspector (CLI and five MCP tools). The risk engine, the remediation projection, the batch triage, the compatibility checker, the scaffold generator, and the hook codegen are tested as pure functions; the decoder against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and against a built token account; and the MCP handlers with an injected fetcher. A **16-case scored eval suite** (`npm run evals`) runs the executable scenarios through the real engine and fails the build on any verdict regression. **84 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
+- `examples/mint-inspector`: the read-only inspector (CLI and five MCP tools). The risk engine, the remediation projection, the batch triage, the compatibility checker, the scaffold generator, and the hook codegen are tested as pure functions; the decoder against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded offline, and against a built token account; and the MCP handlers with an injected fetcher. A **21-case scored eval suite** (`npm run evals`, 11 of them real mainnet mints) runs the executable scenarios through the real engine and fails the build on any verdict regression. The inspector also takes a **second hop** on an active hook to flag whether the hook program is upgradeable. **98 tests, offline.** See [examples/mint-inspector/README.md](examples/mint-inspector/README.md).
 
 A captured run is committed at [examples/VERIFICATION_OUTPUT.txt](examples/VERIFICATION_OUTPUT.txt), and [THREAT_MODEL.md](THREAT_MODEL.md) maps each adversarial test to the threat it closes. Representative prompts with the expected routing and assertions are in [EVALS.md](EVALS.md). A GitHub Actions workflow (`.github/workflows/verify.yml`) runs the suites on every push, plus a best-effort live mainnet smoke test and the on-chain transfer-hook end-to-end scenario.
 
@@ -102,9 +103,10 @@ Token-2022 tooling tends to take one of three shapes: a docs-plus-hook skill, a 
 | Value-aware fee (near-100% honeypot, scheduled jump) | yes | no | no | no |
 | Build-time mint scaffold with guardrails | yes (`scaffold_mint`, refuses illegal sets) | no | no | no |
 | Transfer-hook integration codegen | yes (`--hook-codegen`, Execute-set resolution) | no | no | no |
+| Second-hop hook upgrade-authority analysis | yes (immutable vs swappable, names the authority) | no | no | no |
 | Tested Rust transfer hook plus builder (`cargo build-sbf`) | yes (22 unit tests, hardened) | hook only | no | no |
 | Full build plus integrate plus migrate surface | yes | partial (docs) | no (audit-only) | partial (build docs) |
-| Offline deterministic suite | 114 checks plus a 16-case scored eval suite plus CI live smoke | hook tests | audit lib plus CI | none |
+| Offline deterministic suite | 128 checks plus a 21-case scored eval suite (11 real mainnet mints) plus CI live smoke | hook tests | audit lib plus CI | none |
 
 A focused mint auditor covers the audit axis well (conditional severity, scoring, fix templates). This skill matches that core and adds agent-callable MCP tools, batch triage, the recomputed remediation projection, a value-aware transfer-fee engine, token-account inspection, a guardrailed scaffold generator, and a tested Rust transfer hook, so it spans the whole build-and-integrate surface rather than one slice of it.
 
@@ -120,7 +122,7 @@ Reference: `resources.md`.
 
 ### Tools
 
-`mint-inspector.md` documents the read-only inspector that decodes a live mint's extensions and reports its wallet, DEX, and exchange integration risks. It ships as a CLI and five MCP tools in `examples/mint-inspector`: `inspect_mint` (decode and assess one live mint, with a renounce-to-remediate path), `inspect_many` (triage a list of mints in one call with per-mint verdicts and an aggregate), `check_extension_compatibility` (vet a planned extension set before any mint exists), `scaffold_mint` (generate a correct, correctly-ordered, correctly-sized mint from a legal extension set, refusing any set the runtime would reject at init), and `generate_hook_transfer` (emit a correct transfer client for a hooked mint, extra accounts resolved against the Execute set), with offline tests.
+`mint-inspector.md` documents the read-only inspector that decodes a live mint or token account and reports its wallet, DEX, and exchange integration risks. It ships as a CLI and the five MCP tools described under "What sets it apart" above (`inspect_mint`, `inspect_many`, `check_extension_compatibility`, `scaffold_mint`, `generate_hook_transfer`), in `examples/mint-inspector`, with offline tests.
 
 ### Core (delegated to solana-dev-skill)
 

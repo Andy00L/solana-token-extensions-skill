@@ -757,6 +757,12 @@ function baseAuthorityFindings(authorities: MintAuthorityLiveness): Finding[] {
 
 /** Whether a finding disqualifies (or would disqualify) a CEX listing. */
 function isCexBlocker(finding: Finding): boolean {
+  // The hook-program finding is synthetic (a second-hop read, not a decoded
+  // extension), so it is not in RISK_RULES: an upgradeable hook (high) blocks a
+  // listing because the audited bytecode can be swapped after the fact.
+  if (finding.extension === "transfer-hook-program") {
+    return severityRank(finding.severity) >= severityRank("high");
+  }
   const rule = RISK_RULES[finding.extension];
   if (rule === undefined) {
     return false;
@@ -789,6 +795,21 @@ function computePosture(findings: Finding[], conflicts: Conflict[]): Posture {
     dexFrictions,
     walletCaveats,
   };
+}
+
+/**
+ * Append second-hop findings (for example a hook-program mutability finding) to an
+ * assessment and recompute its posture. The renounce-to-remediate projection is
+ * unaffected, since these findings are not renounceable mint authorities.
+ */
+export function withAdditionalFindings(assessment: Assessment, extraFindings: Finding[]): Assessment {
+  if (extraFindings.length === 0) {
+    return assessment;
+  }
+  const findings = [...assessment.findings, ...extraFindings].sort(
+    (left, right) => severityRank(right.severity) - severityRank(left.severity),
+  );
+  return { findings, conflicts: assessment.conflicts, posture: computePosture(findings, assessment.conflicts) };
 }
 
 function dedupe(values: string[]): string[] {

@@ -44,8 +44,9 @@ describe("scored eval suite (evals.json against the real risk engine)", () => {
     expect(typo.failures.join(" ")).toContain("unknown extension id");
   });
 
-  it("runs every case and scores 100% (no verdict regression)", () => {
-    const report = runEvalSuite(loadSuite());
+  it("runs every case at 100% and is deterministic across runs", () => {
+    const suite = loadSuite();
+    const report = runEvalSuite(suite);
     // Surface exactly which case and which assertion failed, not just a count.
     const failures = report.results
       .filter((result) => !result.ok)
@@ -53,6 +54,9 @@ describe("scored eval suite (evals.json against the real risk engine)", () => {
     expect(failures).toEqual([]);
     expect(report.passed).toBe(report.total);
     expect(report.accuracy).toBe(100);
+    // The risk engine is pure: a second run must be byte-identical. The CI
+    // determinism gate diffs two JSON runs; this proves it in-process too.
+    expect(runEvalSuite(suite)).toEqual(runEvalSuite(suite));
   });
 
   it("covers the executable EVALS.md rows, with no vacuous case", () => {

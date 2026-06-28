@@ -94,6 +94,32 @@ export async function fetchMintAccounts(addresses: string[], rpcUrl: string): Pr
   );
 }
 
+/**
+ * Fetch a raw account (no mint/token validation) for second-hop reads such as a hook
+ * program and its ProgramData. Returns null on a bad address, RPC failure, or missing
+ * account, so the caller degrades to a caveat rather than throwing. An optional
+ * dataSlice fetches only the bytes needed (the ProgramData header is 45 bytes), so a
+ * program's full bytecode is never pulled.
+ */
+export async function fetchRawAccount(
+  addressInput: string,
+  rpcUrl: string,
+  dataSlice?: { offset: number; length: number },
+): Promise<AccountInfo<Buffer> | null> {
+  let address: PublicKey;
+  try {
+    address = new PublicKey(addressInput);
+  } catch {
+    return null;
+  }
+  try {
+    const connection = new Connection(rpcUrl, "confirmed");
+    return await connection.getAccountInfo(address, { commitment: "confirmed", dataSlice });
+  } catch {
+    return null;
+  }
+}
+
 /** A human-readable fetch error message. */
 export function formatFetchError(reason: FetchError): string {
   switch (reason.kind) {

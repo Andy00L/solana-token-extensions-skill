@@ -91,7 +91,7 @@ The same core is exposed over MCP as five read-only tools (each with declared re
 npm run mcp        # serves the tools over stdio
 ```
 
-- `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }` and returns the text report (including the renounce-to-remediate path), the JSON inspection, and a structured verdict for a live mint.
+- `inspect_mint` takes `{ mintAddress: string, rpcUrl?: string }` and returns the text report (including the renounce-to-remediate path), the JSON inspection, and a structured verdict for a live mint. When the mint has an active transfer hook, it follows the hook to its program and reports whether the hook is immutable or upgradeable (an upgradeable hook can be swapped for a sell-blocker after an audit).
 - `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up (worst verdict, counts by severity, how many carry a CEX listing blocker), for triaging a listing set.
 - `check_extension_compatibility` takes `{ extensions: string[] }` (extension ids such as `transfer-hook`, `permanent-delegate`, `scaled-ui-amount`) and returns the conflicts and integration posture of a planned set, before any mint exists.
 - `scaffold_mint` takes `{ extensions: string[], decimals?: number }` and returns an init plan plus TypeScript mint-creation code with the order and sizing correct, refusing any set the runtime would reject at init.
@@ -105,7 +105,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**84 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**98 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against ten captured mainnet mints (PYUSD, USDG, USDC, USDT, wSOL, BONK, JUP, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The second-hop hook-program analysis (immutable vs upgradeable) is tested against the captured WNS hook program. All IO is isolated in `src/fetch-account.ts` and injected in tests: the mint read, plus the hook program and its ProgramData header when a hook is active.
 
 ### Scored eval suite
 
@@ -113,7 +113,7 @@ npm test           # tsc --noEmit, then the suite (one file per process, retries
 npm run evals      # run evals.json through the engine; prints a PASS/FAIL table and an accuracy
 ```
 
-`evals.json` turns the executable rows of [EVALS.md](../../EVALS.md) into 16 scored cases: each feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the produced verdict (severity, 0-to-100 score, CEX blockers, conflicts, decoded extensions, or remediation path). A vitest gate (`tests/evals.test.ts`) runs the same suite under `make verify` and fails the build if any verdict regresses. Latest run: 16 of 16 cases pass (100%).
+`evals.json` turns the executable rows of [EVALS.md](../../EVALS.md) into 21 scored cases (11 of them real mainnet mints): each feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the produced verdict (severity, 0-to-100 score, CEX blockers, conflicts, decoded extensions, or remediation path). A vitest gate (`tests/evals.test.ts`) runs the same suite under `make verify` and fails the build if any verdict regresses. Latest run: 21 of 21 cases pass (100%), 11 of them real mainnet mints.
 
 ## Dependency advisories
 
@@ -122,7 +122,7 @@ npm run evals      # run evals.json through the engine; prints a PASS/FAIL table
 - `bigint-buffer` and `uuid`: pulled in by `@solana/web3.js` 1.x and `@solana/spl-token` 0.4.x. The advised fix downgrades `@solana/spl-token` to 0.1.8, which removes Token-2022 entirely, so it is not applied.
 - `esbuild` and `vitest`/`@vitest/mocker`: pulled in by the test runner. The `@vitest/mocker` advisory only applies when the Vitest UI server is running; the suite runs headless with `vitest run`, never `--ui`. These do not ship with the tool.
 
-None are reachable in the read-only inspection path (one `getAccountInfo` call, then typed decoding). The pinned stack is kept on purpose; revisit when the Solana client line and the runner have non-breaking upgrades.
+None are reachable in the read-only inspection path (a `getAccountInfo` read for the mint, plus the hook program and its ProgramData header when a hook is active, then typed decoding). The pinned stack is kept on purpose; revisit when the Solana client line and the runner have non-breaking upgrades.
 
 ## Layout
 
@@ -131,12 +131,13 @@ src/
   extension-catalog.ts   ExtensionType to id and label, keyed off the spl-token enum plus interface-only codes
   decode-mint.ts         decode a mint account into a serializable structure (errors as values)
   assess-risk.ts         executable form of the skill's compatibility and integration rules
-  inspect.ts             decode + assess, plus the shared text report formatter
+  inspect.ts             decode + assess, the second-hop hook enrichment, and the text report formatter
+  hook-program.ts        second hop: decode the hook program's upgrade authority (immutable vs swappable)
   check-compatibility.ts transport-free check_extension_compatibility handler
   generate-mint.ts       build-time mint scaffold generator (vet + emit ordered, sized init code)
   hook-codegen.ts        transfer-hook integration codegen (resolve extra accounts, emit transfer client)
   inspect-many.ts        transport-free inspect_many batch handler plus the aggregate roll-up (one getMultipleAccounts round-trip)
-  fetch-account.ts       the only IO: one getAccountInfo call
+  fetch-account.ts       the only IO: getAccountInfo reads (the mint, and the hook program for the second hop)
   cli.ts                 CLI entry (one address, or several for a batch triage)
   mcp-tool.ts            transport-free inspect_mint handler (testable with an injected fetcher)
   mcp-server.ts          thin MCP stdio server exposing the five tools

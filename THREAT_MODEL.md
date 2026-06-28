@@ -64,6 +64,7 @@ hard to fool into calling a dangerous mint safe.
 | An illegal extension set presented as buildable | the five runtime-rejected combinations are flagged before any mint exists | `check-compatibility.test.ts` scaled-ui + interest-bearing; `assess-risk.test.ts` combination rules |
 | A malformed or non-mint account fed to the decoder | typed, distinct errors; no throw crosses the public surface | `decode-inspect.test.ts` wrong-owner, not-a-mint, account-not-found |
 | One bad address blinding a portfolio scan | a per-address fetch or decode failure becomes an error verdict; the batch still triages the rest | `inspect-many.test.ts` |
+| An upgradeable transfer hook, audited today and swapped for a sell-blocker tomorrow | second hop: read the hook program's ProgramData header and report immutable vs upgradeable, naming the upgrade authority; an upgradeable hook is a CEX blocker | `hook-program.test.ts` (byte decoders), `hook-enrich.test.ts` (BNDRG's live WNS hook is upgradeable) |
 | A claim that the inspector decodes a live mint | a gated CI smoke test fetches a real mainnet mint and asserts the verdict | `live-smoke.test.ts` (CI, `LIVE_RPC=1`) |
 
 The risk thresholds and the conditional-severity model are grounded in real
