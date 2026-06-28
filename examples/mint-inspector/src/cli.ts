@@ -12,7 +12,7 @@
  */
 import type { DecodeError } from "./decode-mint";
 import { describeError } from "./describe-error";
-import { type FetchError, fetchCurrentEpoch, fetchMintAccount, formatFetchError } from "./fetch-account";
+import { type FetchError, fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts, formatFetchError } from "./fetch-account";
 import { formatDecodeError, formatReport, inspectAccount } from "./inspect";
 import { formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
 import { formatGenerateReport, generateMintScaffold } from "./generate-mint";
@@ -194,7 +194,7 @@ async function runCli(argv: string[]): Promise<number> {
     const epoch = await fetchCurrentEpoch(parsed.rpcUrl);
     const output = await handleInspectMany(
       { mintAddresses: parsed.addresses, rpcUrl: parsed.rpcUrl, currentEpoch: epoch ?? undefined },
-      fetchMintAccount,
+      fetchMintAccounts,
       DEFAULT_RPC_URL,
     );
     if (output.status === "error") {

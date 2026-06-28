@@ -28,18 +28,19 @@ npm run inspect -- <MINT_ADDRESS> [--rpc <URL>]            # text report
 npm run inspect -- <MINT_ADDRESS> --json                   # machine-readable
 npm run inspect -- <ADDRESS_1> <ADDRESS_2> ... [--json]    # batch triage of many addresses
 npm run inspect -- --scaffold <ID_1>,<ID_2>,... [--decimals <N>]   # generate mint code (offline)
+npm run inspect -- --hook-codegen <MINT> --hook <PROGRAM> [--decimals <N>]   # transfer-hook client (offline)
 ```
 
 The default RPC is Solana mainnet-beta. Pass `--rpc` for another cluster or a private endpoint. One address prints the full report; more than one prints a batch summary (worst verdict, counts by severity, how many carry a CEX blocker) with a per-address line. Exit code is 0 on success, 1 on an inspection error (bad address, RPC failure, account not found, not a mint), 2 on a usage error.
 
 ## MCP server
 
-The same logic is exposed over MCP as four read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict), so an agent in the kit can work without writing code.
+The same logic is exposed over MCP as five read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict), so an agent in the kit can work without writing code.
 
 ```bash
 cd examples/mint-inspector
 npm install
-npm run mcp        # serves the four tools over stdio
+npm run mcp        # serves the five tools over stdio
 ```
 
 Register them in an MCP client by pointing the client at that command.
@@ -48,6 +49,7 @@ Register them in an MCP client by pointing the client at that command.
 - `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up, for triaging a listing set in one call.
 - `check_extension_compatibility` takes `{ extensions: string[] }` and returns the conflicts and posture of a planned set before any mint exists.
 - `scaffold_mint` takes `{ extensions: string[], decimals?: number }` and returns an init plan plus mint-creation code with the order and sizing correct, refusing any set the runtime would reject at init.
+- `generate_hook_transfer` takes `{ mint: string, hookProgramId: string, decimals?: number }` and returns a correct transfer client for a hooked mint, with the extra accounts resolved against the Execute account set, plus a static classification of the hook's extra-account model.
 
 ## How it works
 The decoder uses the typed `@solana/spl-token` getters, never raw byte offsets. The risk rules are a direct, executable form of [compatibility-matrix.md](compatibility-matrix.md) and [integration-compatibility.md](integration-compatibility.md): every rule cites the document it came from, so the tool and the written guidance stay in sync. Severity also weighs a transfer fee by size (a near-100% fee is a sell-blocking honeypot even when the rate is locked) and resolves the active versus a scheduled fee under the two-epoch rule. The same engine backs `scaffold_mint`, which vets a set and emits ordered, correctly-sized mint code. The core is pure and tested offline with LiteSVM-built mints; the only IO is a single `getAccountInfo` call.

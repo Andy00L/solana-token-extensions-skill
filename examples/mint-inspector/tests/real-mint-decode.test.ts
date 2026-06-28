@@ -2,8 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 import { resolveActiveFee } from "../src/decode-mint";
 import { inspectAccount, inspectionSummary, isLiveAuthorityKey } from "../src/inspect";
-import { batchSummary, handleInspectMany } from "../src/inspect-many";
-import type { AccountFetcher } from "../src/mcp-tool";
+import { type MultiAccountFetcher, batchSummary, handleInspectMany } from "../src/inspect-many";
 import {
   REAL_MINT_FIXTURES,
   type RealMintFixture,
@@ -13,12 +12,14 @@ import {
 
 // A fetcher backed by the captured mainnet fixtures, so a batch can be triaged
 // fully offline against real on-chain data.
-function realFixtureFetcher(): AccountFetcher {
+function realFixtureFetcher(): MultiAccountFetcher {
   const accountByAddress = new Map(REAL_MINT_FIXTURES.map((fixture) => [fixture.address, fixtureAccountInfo(fixture)]));
-  return async (addressInput) => {
-    const account = accountByAddress.get(addressInput) ?? null;
-    return { status: "ok", address: new PublicKey(addressInput), account };
-  };
+  return async (addresses) =>
+    addresses.map((addressInput) => ({
+      status: "ok",
+      address: new PublicKey(addressInput),
+      account: accountByAddress.get(addressInput) ?? null,
+    }));
 }
 
 function fixtureByName(name: string): RealMintFixture {

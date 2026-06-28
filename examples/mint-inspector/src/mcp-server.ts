@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 /**
- * MCP stdio server exposing four read-only tools, inspect_mint, inspect_many,
- * check_extension_compatibility, and scaffold_mint, so an agent in the Solana AI Kit
- * can inspect a live mint, triage a list of mints, vet a proposed extension set, and
- * scaffold a correct mint, without writing code. It is a thin transport over the
- * tested handler cores: it wires the SDK to them and formats the result. Every tool
- * is read only and never signs, sends, or logs any secret.
+ * MCP stdio server exposing five read-only tools, inspect_mint, inspect_many,
+ * check_extension_compatibility, scaffold_mint, and generate_hook_transfer, so an
+ * agent in the Solana AI Kit can inspect a live mint, triage a list of mints, vet a
+ * proposed extension set, scaffold a correct mint, and generate a transfer-hook
+ * transfer client, without writing code. It is a thin transport over the tested
+ * handler cores: it wires the SDK to them and formats the result. Every tool is read
+ * only and never signs, sends, or logs any secret.
  * Source: @modelcontextprotocol/sdk server/mcp.js (registerTool) and server/stdio.js.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { describeError } from "./describe-error";
-import { fetchCurrentEpoch, fetchMintAccount } from "./fetch-account";
+import { fetchCurrentEpoch, fetchMintAccount, fetchMintAccounts } from "./fetch-account";
 import { formatAccountError, formatReport, inspectionSummary } from "./inspect";
 import { handleInspectMint } from "./mcp-tool";
 import { batchSummary, formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
 import { checkCompatibility, compatibilitySummary, formatCompatibilityReport } from "./check-compatibility";
 import { formatGenerateReport, generateMintScaffold, generateMintSummary } from "./generate-mint";
+import { formatHookCodegen, generateHookTransferCodegen, hookCodegenSummary } from "./hook-codegen";
 
 // Solana public mainnet RPC. Source: https://solana.com/docs/core/clusters
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
@@ -69,6 +71,14 @@ const SCAFFOLD_VERDICT_SHAPE = {
   scaffoldable: z.array(z.string()),
   unsupported: z.array(z.string()),
   stepCount: z.number(),
+};
+const HOOK_VERDICT_SHAPE = {
+  mint: z.string(),
+  hookProgramId: z.string(),
+  decimals: z.number(),
+  validationPda: z.string(),
+  executeAccountOrder: z.array(z.string()),
+  caveats: z.array(z.string()),
 };
 
 // Read-only tool annotations. Source: MCP tools spec 2025-06-18 (ToolAnnotations).
@@ -130,7 +140,7 @@ server.registerTool(
     const currentEpoch = await fetchCurrentEpoch(args.rpcUrl ?? DEFAULT_RPC_URL);
     const output = await handleInspectMany(
       { mintAddresses: args.mintAddresses, rpcUrl: args.rpcUrl, currentEpoch: currentEpoch ?? undefined },
-      fetchMintAccount,
+      fetchMintAccounts,
       DEFAULT_RPC_URL,
     );
     if (output.status === "error") {
@@ -194,6 +204,32 @@ server.registerTool(
         { type: "text", text: JSON.stringify(result) },
       ],
       structuredContent: generateMintSummary(result),
+    };
+  },
+);
+
+server.registerTool(
+  "generate_hook_transfer",
+  {
+    title: "Generate a transfer-hook transfer client",
+    description:
+      "Generate a correct client snippet to transfer a Token-2022 mint that has an active transfer hook, with the extra accounts resolved against the Execute account set (the fix for the most common hook-integration bug), plus a static classification of the hook's extra-account model and the resolution caveats. Read only and offline.",
+    inputSchema: {
+      mint: z.string().describe("base58 mint address that carries the transfer hook"),
+      hookProgramId: z.string().describe("base58 transfer-hook program id, from the mint's transfer-hook extension"),
+      decimals: z.number().int().min(0).max(18).optional().describe("mint decimals (default 9)"),
+    },
+    outputSchema: HOOK_VERDICT_SHAPE,
+    annotations: OFFLINE_READ_ANNOTATIONS,
+  },
+  async (args) => {
+    const result = generateHookTransferCodegen({ mint: args.mint, hookProgramId: args.hookProgramId, decimals: args.decimals });
+    return {
+      content: [
+        { type: "text", text: formatHookCodegen(result) },
+        { type: "text", text: JSON.stringify(result) },
+      ],
+      structuredContent: hookCodegenSummary(result),
     };
   },
 );

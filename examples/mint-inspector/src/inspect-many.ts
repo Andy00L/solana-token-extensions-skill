@@ -4,17 +4,17 @@
  * triage of a listing set or a holdings list, where the question is "which of
  * these carry a listing blocker" rather than the full report for one mint.
  *
- * The per-address fetch is the only IO; it reuses the tested handleInspectMint
- * core, so a single mint inspects identically whether called alone or in a batch.
- * A per-address fetch or decode failure becomes an error verdict inside the report
- * rather than failing the whole batch: one bad address must not blind the triage.
- * Only a top-level input problem (empty set, over the cap) is a batch-level error.
+ * The accounts are fetched in one getMultipleAccounts round-trip (chunked at 100),
+ * then each is inspected offline with the same inspectAccount core, so a single mint
+ * inspects identically whether called alone or in a batch. A per-address fetch or
+ * decode failure becomes an error verdict inside the report rather than failing the
+ * whole batch: one bad address must not blind the triage. Only a top-level input
+ * problem (empty set, over the cap) is a batch-level error.
  */
 import { type Severity, severityRank } from "./assess-risk";
 import type { DecodeError } from "./decode-mint";
-import type { FetchError } from "./fetch-account";
-import { type Inspection, formatAccountError, inspectionVerdict } from "./inspect";
-import { type AccountFetcher, handleInspectMint } from "./mcp-tool";
+import type { FetchError, FetchResult } from "./fetch-account";
+import { type Inspection, formatAccountError, inspectAccount, inspectionVerdict } from "./inspect";
 
 // A read-only triage tool: cap the addresses per call so one request cannot fan
 // out into an unbounded number of RPC calls. 50 covers a typical listing set;
@@ -130,14 +130,18 @@ function sortVerdicts(verdicts: BatchVerdict[]): BatchVerdict[] {
   });
 }
 
+// Fetches every account in the batch in one getMultipleAccounts round-trip (chunked
+// at 100 by the implementation), aligned to the requested address order.
+export type MultiAccountFetcher = (addresses: string[], rpcUrl: string) => Promise<FetchResult[]>;
+
 /**
- * Inspect many addresses through an injected fetcher. Returns a batch-level error
- * only for an empty set or one over MAX_BATCH_SIZE; per-address failures are
+ * Inspect many addresses through an injected batch fetcher. Returns a batch-level
+ * error only for an empty set or one over MAX_BATCH_SIZE; per-address failures are
  * reported as error verdicts inside the report.
  */
 export async function handleInspectMany(
   input: InspectManyInput,
-  fetchAccount: AccountFetcher,
+  fetchAccounts: MultiAccountFetcher,
   defaultRpcUrl: string,
 ): Promise<InspectManyOutput> {
   const addresses = normalizeAddresses(input.mintAddresses);
@@ -148,30 +152,32 @@ export async function handleInspectMany(
     return { status: "error", reason: { kind: "too-many", count: addresses.length, max: MAX_BATCH_SIZE } };
   }
 
-  const verdicts: BatchVerdict[] = [];
-  for (const address of addresses) {
-    // Sequential by design: an injected fetcher in tests is deterministic, and a
-    // real RPC is friendlier to rate limits one request at a time for this size.
-    const output = await handleInspectMint(
-      { mintAddress: address, rpcUrl: input.rpcUrl, currentEpoch: input.currentEpoch },
-      fetchAccount,
-      defaultRpcUrl,
-    );
-    if (output.status === "error") {
-      verdicts.push({ address, status: "error", reason: output.reason });
-      continue;
+  const rpcUrl = input.rpcUrl !== undefined && input.rpcUrl.length > 0 ? input.rpcUrl : defaultRpcUrl;
+  // One round-trip for the whole set, then inspect each result offline.
+  const fetched = await fetchAccounts(addresses, rpcUrl);
+  const verdicts: BatchVerdict[] = addresses.map((address, index) => {
+    const result = fetched[index];
+    if (result === undefined) {
+      return { address, status: "error", reason: { kind: "rpc-failed", detail: "no account returned for this address" } };
     }
-    const verdict = inspectionVerdict(output.inspection);
-    verdicts.push({
+    if (result.status === "error") {
+      return { address, status: "error", reason: result.reason };
+    }
+    const inspected = inspectAccount(result.address, result.account, input.currentEpoch);
+    if (inspected.status === "error") {
+      return { address, status: "error", reason: inspected.reason };
+    }
+    const verdict = inspectionVerdict(inspected.inspection);
+    return {
       address,
       status: "ok",
-      kind: output.inspection.kind,
+      kind: inspected.inspection.kind,
       severity: verdict.severity,
       score: verdict.score,
-      cexBlockers: cexBlockersOf(output.inspection),
-      inspection: output.inspection,
-    });
-  }
+      cexBlockers: cexBlockersOf(inspected.inspection),
+      inspection: inspected.inspection,
+    };
+  });
 
   const sorted = sortVerdicts(verdicts);
   return { status: "ok", report: { aggregate: aggregateVerdicts(sorted), verdicts: sorted } };

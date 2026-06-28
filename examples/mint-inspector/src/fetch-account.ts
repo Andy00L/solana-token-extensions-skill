@@ -47,6 +47,53 @@ export async function fetchCurrentEpoch(rpcUrl: string): Promise<number | null> 
   }
 }
 
+/**
+ * Fetch many accounts in one getMultipleAccounts round-trip (chunked at the RPC's
+ * 100-key limit), aligned to the input address order. An invalid base58 address
+ * becomes an invalid-address error and is never sent to the RPC; a whole-batch RPC
+ * failure makes every valid address an rpc-failed error. A missing account is
+ * { account: null }, which the decoder maps to "account-not-found".
+ */
+export async function fetchMintAccounts(addresses: string[], rpcUrl: string): Promise<FetchResult[]> {
+  const resolved = addresses.map((addressInput) => {
+    try {
+      return { addressInput, key: new PublicKey(addressInput) };
+    } catch {
+      return { addressInput, key: null };
+    }
+  });
+  const validEntries = resolved.filter(
+    (entry): entry is { addressInput: string; key: PublicKey } => entry.key !== null,
+  );
+
+  const accountByAddress = new Map<string, AccountInfo<Buffer> | null>();
+  try {
+    const connection = new Connection(rpcUrl, "confirmed");
+    const CHUNK_SIZE = 100; // getMultipleAccounts caps at 100 keys per call. Source: Solana JSON-RPC.
+    for (let start = 0; start < validEntries.length; start += CHUNK_SIZE) {
+      const chunk = validEntries.slice(start, start + CHUNK_SIZE);
+      const infos = await connection.getMultipleAccountsInfo(
+        chunk.map((entry) => entry.key),
+        "confirmed",
+      );
+      chunk.forEach((entry, offset) => accountByAddress.set(entry.addressInput, infos[offset] ?? null));
+    }
+  } catch (rpcError) {
+    const detail = describeError(rpcError);
+    return resolved.map((entry) =>
+      entry.key === null
+        ? { status: "error", reason: { kind: "invalid-address", value: entry.addressInput } }
+        : { status: "error", reason: { kind: "rpc-failed", detail } },
+    );
+  }
+
+  return resolved.map((entry) =>
+    entry.key === null
+      ? { status: "error", reason: { kind: "invalid-address", value: entry.addressInput } }
+      : { status: "ok", address: entry.key, account: accountByAddress.get(entry.addressInput) ?? null },
+  );
+}
+
 /** A human-readable fetch error message. */
 export function formatFetchError(reason: FetchError): string {
   switch (reason.kind) {

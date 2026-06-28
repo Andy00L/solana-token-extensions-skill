@@ -1,25 +1,26 @@
 import { type AccountInfo, Keypair, PublicKey } from "@solana/web3.js";
 import { LiteSVM } from "litesvm";
 import { describe, expect, it } from "vitest";
-import { MAX_BATCH_SIZE, formatBatchReport, handleInspectMany } from "../src/inspect-many";
-import type { AccountFetcher } from "../src/mcp-tool";
+import { type MultiAccountFetcher, MAX_BATCH_SIZE, formatBatchReport, handleInspectMany } from "../src/inspect-many";
 import { createClassicMint, createControlsMint, createRichMint, fundedPayer, readAccountInfo } from "./fixtures";
 
 const DEFAULT_RPC = "https://default.example/rpc";
 
-// Build an offline fetcher backed by a map of address -> account info. An address
-// mapped to null returns a missing account (a not-found decode error); an address
-// absent from the map also returns null, matching a real RPC for an empty address.
-function fetcherFrom(accounts: Map<string, AccountInfo<Buffer> | null>): AccountFetcher {
-  return async (addressInput) => {
-    let address: PublicKey;
-    try {
-      address = new PublicKey(addressInput);
-    } catch {
-      return { status: "error", reason: { kind: "invalid-address", value: addressInput } };
-    }
-    return { status: "ok", address, account: accounts.get(addressInput) ?? null };
-  };
+// Build an offline batch fetcher backed by a map of address -> account info. An
+// address mapped to null returns a missing account (a not-found decode error); an
+// address absent from the map also returns null, matching a real RPC for an empty
+// address. The fetcher receives the whole address list in one call.
+function fetcherFrom(accounts: Map<string, AccountInfo<Buffer> | null>): MultiAccountFetcher {
+  return async (addresses) =>
+    addresses.map((addressInput) => {
+      let address: PublicKey;
+      try {
+        address = new PublicKey(addressInput);
+      } catch {
+        return { status: "error", reason: { kind: "invalid-address", value: addressInput } };
+      }
+      return { status: "ok", address, account: accounts.get(addressInput) ?? null };
+    });
 }
 
 describe("handleInspectMany", () => {
@@ -104,6 +105,36 @@ describe("handleInspectMany", () => {
     }
     expect(output.report.aggregate.total).toBe(1);
     expect(output.report.aggregate.inspected).toBe(1);
+  });
+
+  it("fetches the whole batch in one round-trip, not one call per address", async () => {
+    const svm = new LiteSVM();
+    const payer = fundedPayer(svm);
+    const { mint: richMint } = createRichMint(svm, payer);
+    const { mint: controlsMint } = createControlsMint(svm, payer);
+    const accounts = new Map<string, AccountInfo<Buffer> | null>([
+      [richMint.toBase58(), readAccountInfo(svm, richMint)],
+      [controlsMint.toBase58(), readAccountInfo(svm, controlsMint)],
+    ]);
+    const base = fetcherFrom(accounts);
+    let calls = 0;
+    let lastBatchSize = 0;
+    const counting: MultiAccountFetcher = async (addresses, rpcUrl) => {
+      calls += 1;
+      lastBatchSize = addresses.length;
+      return base(addresses, rpcUrl);
+    };
+
+    const output = await handleInspectMany(
+      { mintAddresses: [richMint.toBase58(), controlsMint.toBase58()] },
+      counting,
+      DEFAULT_RPC,
+    );
+
+    expect(output.status).toBe("ok");
+    // One call for the whole set (getMultipleAccounts), not one per address.
+    expect(calls).toBe(1);
+    expect(lastBatchSize).toBe(2);
   });
 
   it("rejects an empty batch and a batch over the size cap", async () => {

@@ -1,6 +1,6 @@
 # Evals: expected behavior on representative prompts
 
-A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 80 offline tests in `examples/mint-inspector`.
+A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 81 offline tests in `examples/mint-inspector`.
 
 | # | Prompt | Routes to | Must assert |
 |---|--------|-----------|-------------|

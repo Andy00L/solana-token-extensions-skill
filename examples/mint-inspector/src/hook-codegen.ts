@@ -172,6 +172,29 @@ export function generateHookTransferCodegen(input: HookCodegenInput): HookCodege
   };
 }
 
+// A compact, agent-consumable projection of a hook codegen result (everything but
+// the code string), emitted as MCP structuredContent.
+export type HookCodegenSummary = {
+  mint: string;
+  hookProgramId: string;
+  decimals: number;
+  validationPda: string;
+  executeAccountOrder: string[];
+  caveats: string[];
+};
+
+/** Project a hook codegen result to its compact summary (omits the code body). */
+export function hookCodegenSummary(result: HookCodegenResult): HookCodegenSummary {
+  return {
+    mint: result.mint,
+    hookProgramId: result.hookProgramId,
+    decimals: result.decimals,
+    validationPda: result.validationPda,
+    executeAccountOrder: [...result.executeAccountOrder],
+    caveats: result.caveats,
+  };
+}
+
 /** Render a hook codegen result as an aligned plain-text report. */
 export function formatHookCodegen(result: HookCodegenResult): string {
   const lines: string[] = [];

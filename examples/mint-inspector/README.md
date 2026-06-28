@@ -1,6 +1,6 @@
 # mint-inspector
 
-A read-only tool that decodes a Solana mint or token account from on-chain data: its Token-2022 extensions and, for a mint, the wallet, DEX, and CEX integration risks. For a token account it reports the balance, frozen state, withheld fees, and account extensions. Severity is **conditional on authority liveness**: a fund-loss-grade extension scores high only while its controlling authority is live (a renounced permanent delegate, or a locked fee rate, is far lower risk), mirroring how integrators such as Jupiter triage a token. It emits a 0-to-100 risk score, a verdict tier, a concrete `fix:` per finding, and a renounce-to-remediate path (the verdict each live authority an issuer could renounce would produce). It ships as a CLI and an MCP server (four read-only tools, with declared read-only annotations and a structured agent-consumable verdict) over the same tested core, and the CLI takes more than one address to triage a whole set at once, or `--scaffold` to generate mint code. It never signs or sends a transaction: it reads one account.
+A read-only tool that decodes a Solana mint or token account from on-chain data: its Token-2022 extensions and, for a mint, the wallet, DEX, and CEX integration risks. For a token account it reports the balance, frozen state, withheld fees, and account extensions. Severity is **conditional on authority liveness**: a fund-loss-grade extension scores high only while its controlling authority is live (a renounced permanent delegate, or a locked fee rate, is far lower risk), mirroring how integrators such as Jupiter triage a token. It emits a 0-to-100 risk score, a verdict tier, a concrete `fix:` per finding, and a renounce-to-remediate path (the verdict each live authority an issuer could renounce would produce). It ships as a CLI and an MCP server (five read-only tools, with declared read-only annotations and a structured agent-consumable verdict) over the same tested core, and the CLI takes more than one address to triage a whole set at once, or `--scaffold` / `--hook-codegen` to generate mint or transfer code. It never signs or sends a transaction: it reads one account.
 
 ![Inspecting the PayPal USD (PYUSD) mint](demo.gif)
 
@@ -19,6 +19,7 @@ npm run inspect -- <MINT_ADDRESS> [--rpc <URL>]   # text report (with a renounce
 npm run inspect -- <MINT_ADDRESS> --json          # machine-readable JSON
 npm run inspect -- <ADDR_1> <ADDR_2> ...          # batch triage of many addresses
 npm run inspect -- --scaffold <ID_1>,<ID_2>,...   # generate a mint scaffold (offline)
+npm run inspect -- --hook-codegen <MINT> --hook <PROGRAM>   # transfer-hook transfer client (offline)
 npm run inspect -- --help
 ```
 
@@ -84,7 +85,7 @@ Per address (worst first):
 
 ## MCP server
 
-The same core is exposed over MCP as four read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict via `structuredContent`), so an agent can work without writing code.
+The same core is exposed over MCP as five read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict via `structuredContent`), so an agent can work without writing code.
 
 ```bash
 npm run mcp        # serves the tools over stdio
@@ -94,6 +95,7 @@ npm run mcp        # serves the tools over stdio
 - `inspect_many` takes `{ mintAddresses: string[], rpcUrl?: string }` (up to 50) and returns a per-address verdict plus an aggregate roll-up (worst verdict, counts by severity, how many carry a CEX listing blocker), for triaging a listing set.
 - `check_extension_compatibility` takes `{ extensions: string[] }` (extension ids such as `transfer-hook`, `permanent-delegate`, `scaled-ui-amount`) and returns the conflicts and integration posture of a planned set, before any mint exists.
 - `scaffold_mint` takes `{ extensions: string[], decimals?: number }` and returns an init plan plus TypeScript mint-creation code with the order and sizing correct, refusing any set the runtime would reject at init.
+- `generate_hook_transfer` takes `{ mint: string, hookProgramId: string, decimals?: number }` and returns a correct transfer client for a hooked mint, with the extra accounts resolved against the Execute account set, plus a static classification of the hook's extra-account model.
 
 Register them by pointing an MCP client at that command.
 
@@ -103,7 +105,7 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**80 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, and the build-time scaffold generator are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**81 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
 
 ## Dependency advisories
 
@@ -124,10 +126,11 @@ src/
   inspect.ts             decode + assess, plus the shared text report formatter
   check-compatibility.ts transport-free check_extension_compatibility handler
   generate-mint.ts       build-time mint scaffold generator (vet + emit ordered, sized init code)
-  inspect-many.ts        transport-free inspect_many batch handler plus the aggregate roll-up
+  hook-codegen.ts        transfer-hook integration codegen (resolve extra accounts, emit transfer client)
+  inspect-many.ts        transport-free inspect_many batch handler plus the aggregate roll-up (one getMultipleAccounts round-trip)
   fetch-account.ts       the only IO: one getAccountInfo call
   cli.ts                 CLI entry (one address, or several for a batch triage)
   mcp-tool.ts            transport-free inspect_mint handler (testable with an injected fetcher)
-  mcp-server.ts          thin MCP stdio server exposing the four tools
+  mcp-server.ts          thin MCP stdio server exposing the five tools
 tests/                   pure risk, compatibility, and scaffold tests, LiteSVM decode tests, captured-mint decodes, MCP handler tests, a gated live-RPC smoke test
 ```
