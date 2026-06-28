@@ -22,7 +22,8 @@ import {
   assessExtensions,
   projectRenouncements,
 } from "./assess-risk";
-import { inspectAccount } from "./inspect";
+import { catalogEntries } from "./extension-catalog";
+import { formatList, inspectAccount } from "./inspect";
 import { fixtureAccountInfo, fixtureAddress, fixtureByName } from "./mainnet-fixtures";
 
 // The five severity tiers, mirrored from assess-risk Severity so the JSON can be
@@ -94,6 +95,10 @@ const ExpectSchema = z.object({
   noUnrecognized: z.boolean().optional(),
   extensionDetail: ExtensionDetailExpectSchema.optional(),
   remediation: RemediationExpectSchema.optional(),
+}).refine((expectation) => Object.keys(expectation).length > 0, {
+  // A case with an empty expect would pass trivially; reject it at parse time so the
+  // standalone CLI is protected, not only the vitest gate.
+  message: "expect must assert at least one field (no vacuous cases)",
 });
 
 const EvalCaseSchema = z.object({
@@ -106,11 +111,15 @@ const EvalCaseSchema = z.object({
   expect: ExpectSchema,
 });
 
-export const EvalSuiteSchema = z.object({
-  version: z.number().int().positive(),
-  description: z.string().min(1),
-  cases: z.array(EvalCaseSchema).min(1),
-});
+const EvalSuiteSchema = z
+  .object({
+    version: z.number().int().positive(),
+    description: z.string().min(1),
+    cases: z.array(EvalCaseSchema).min(1),
+  })
+  .refine((suite) => new Set(suite.cases.map((evalCase) => evalCase.id)).size === suite.cases.length, {
+    message: "every case id must be unique",
+  });
 
 export type EvalCase = z.infer<typeof EvalCaseSchema>;
 export type EvalSuite = z.infer<typeof EvalSuiteSchema>;
@@ -189,8 +198,19 @@ function observeFixture(name: string): ObserveResult {
   };
 }
 
+// The catalog is the source of truth for valid extension ids. The engine silently
+// skips an unknown id (so a typo'd set would score a misleading info/0); the runner
+// rejects it the way the real compatibility checker does.
+const KNOWN_EXTENSION_IDS: Set<string> = new Set(catalogEntries().map((entry) => entry.id));
+
 function observe(input: EvalInput): ObserveResult {
   if (input.kind === "set") {
+    const unknownIds = input.extensions
+      .map((extension) => extension.id)
+      .filter((extensionId) => !KNOWN_EXTENSION_IDS.has(extensionId));
+    if (unknownIds.length > 0) {
+      return { ok: false, error: `unknown extension id(s) in set: ${unknownIds.join(", ")}` };
+    }
     return { ok: true, observed: observeSet(input.extensions, input.mintAuthorities) };
   }
   return observeFixture(input.fixture);
@@ -343,10 +363,6 @@ export function runEvalSuite(suite: EvalSuite): EvalSuiteReport {
   // One decimal place keeps a partial pass readable (94.4%) without float noise.
   const accuracy = total === 0 ? 0 : Math.round((passed / total) * 1000) / 10;
   return { total, passed, failed, accuracy, results };
-}
-
-function formatList(values: string[]): string {
-  return values.length === 0 ? "none" : values.join(", ");
 }
 
 function arraysEqual(left: string[], right: string[]): boolean {

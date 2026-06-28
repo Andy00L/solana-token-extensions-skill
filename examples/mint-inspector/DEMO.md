@@ -1,4 +1,4 @@
-# Mint inspector demo (captured 2026-06-27)
+# Mint inspector demo (captured 2026-06-28)
 
 ![The mint inspector decoding PYUSD](demo.gif)
 

@@ -331,7 +331,8 @@ export function formatAssessmentLines(assessment: Assessment): string[] {
   return lines;
 }
 
-function formatList(values: string[]): string {
+/** Render a string list as a comma-separated line, or "none" when empty. */
+export function formatList(values: string[]): string {
   return values.length === 0 ? "none" : values.join(", ");
 }
 

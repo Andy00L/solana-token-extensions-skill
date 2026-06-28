@@ -19,9 +19,29 @@ function loadSuite(): EvalSuite {
 }
 
 describe("scored eval suite (evals.json against the real risk engine)", () => {
-  it("validates against the suite schema", () => {
-    const parsed = parseEvalSuite(readRawSuite());
-    expect(parsed.ok).toBe(true);
+  it("validates the live suite and rejects vacuous, duplicate, malformed, and typo'd cases", () => {
+    expect(parseEvalSuite(readRawSuite()).ok).toBe(true);
+
+    const base = readRawSuite() as { version: number; description: string; cases: Array<Record<string, unknown>> };
+    const sampleCase = base.cases[0];
+
+    // A case whose expect asserts nothing must be rejected (no vacuous pass).
+    expect(parseEvalSuite({ ...base, cases: [{ ...sampleCase, expect: {} }] }).ok).toBe(false);
+    // Duplicate case ids must be rejected.
+    expect(parseEvalSuite({ ...base, cases: [sampleCase, sampleCase] }).ok).toBe(false);
+    // Structurally malformed suites are rejected as values, never thrown on.
+    expect(parseEvalSuite(null).ok).toBe(false);
+    expect(parseEvalSuite({ version: 1 }).ok).toBe(false);
+
+    // A set input with a typo'd extension id fails loudly, not as a silent info/0.
+    const typo = runEvalCase({
+      id: "typo-guard",
+      prompt: "a set with a misspelled extension id",
+      input: { kind: "set", extensions: [{ id: "permnent-delegate" }] },
+      expect: { severity: "critical" },
+    });
+    expect(typo.ok).toBe(false);
+    expect(typo.failures.join(" ")).toContain("unknown extension id");
   });
 
   it("runs every case and scores 100% (no verdict regression)", () => {
