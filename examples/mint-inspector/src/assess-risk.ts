@@ -661,8 +661,16 @@ export function assessExtensions(
 export function projectRenouncements(
   extensions: AssessedExtension[],
   mintAuthorities?: MintAuthorityLiveness,
+  persistentFindings: Finding[] = [],
 ): Remediation {
-  const current = assessExtensions(extensions, mintAuthorities).posture;
+  // Fold any non-renounceable persistent findings (for example a second-hop
+  // hook-program mutability finding) into every projected posture, so the
+  // remediation's current and floor match the enriched headline verdict and reflect
+  // risk the issuer cannot renounce away. With no persistent findings this is exactly
+  // assessExtensions(...).posture, so the base behavior is unchanged.
+  const postureWith = (exts: AssessedExtension[], auth: MintAuthorityLiveness | undefined): Posture =>
+    withAdditionalFindings(assessExtensions(exts, auth), persistentFindings).posture;
+  const current = postureWith(extensions, mintAuthorities);
   const steps: RenounceProjection[] = [];
 
   for (const extension of extensions) {
@@ -674,16 +682,16 @@ export function projectRenouncements(
     const projected = extensions.map((candidate) =>
       candidate.id === extension.id ? { ...candidate, authorityRenounced: true } : candidate,
     );
-    const posture = assessExtensions(projected, mintAuthorities).posture;
+    const posture = postureWith(projected, mintAuthorities);
     steps.push({ target: extension.id, afterSeverity: posture.overallSeverity, afterScore: posture.score });
   }
 
   if (mintAuthorities?.mintAuthorityLive === true) {
-    const posture = assessExtensions(extensions, { ...mintAuthorities, mintAuthorityLive: false }).posture;
+    const posture = postureWith(extensions, { ...mintAuthorities, mintAuthorityLive: false });
     steps.push({ target: "mint-authority", afterSeverity: posture.overallSeverity, afterScore: posture.score });
   }
   if (mintAuthorities?.freezeAuthorityLive === true) {
-    const posture = assessExtensions(extensions, { ...mintAuthorities, freezeAuthorityLive: false }).posture;
+    const posture = postureWith(extensions, { ...mintAuthorities, freezeAuthorityLive: false });
     steps.push({ target: "freeze-authority", afterSeverity: posture.overallSeverity, afterScore: posture.score });
   }
 
@@ -709,7 +717,7 @@ export function projectRenouncements(
     );
     const projectedAuthorities =
       mintAuthorities === undefined ? undefined : { mintAuthorityLive: false, freezeAuthorityLive: false };
-    const posture = assessExtensions(projectedExtensions, projectedAuthorities).posture;
+    const posture = postureWith(projectedExtensions, projectedAuthorities);
     allRenounced = { afterSeverity: posture.overallSeverity, afterScore: posture.score };
   }
 
@@ -799,8 +807,9 @@ function computePosture(findings: Finding[], conflicts: Conflict[]): Posture {
 
 /**
  * Append second-hop findings (for example a hook-program mutability finding) to an
- * assessment and recompute its posture. The renounce-to-remediate projection is
- * unaffected, since these findings are not renounceable mint authorities.
+ * assessment and recompute its posture only. The remediation projection is recomputed
+ * separately by the caller via projectRenouncements with the same findings passed as
+ * persistent, so the headline verdict and the remediation stay consistent.
  */
 export function withAdditionalFindings(assessment: Assessment, extraFindings: Finding[]): Assessment {
   if (extraFindings.length === 0) {

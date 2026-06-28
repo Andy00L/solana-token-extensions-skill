@@ -126,7 +126,7 @@ Per address (worst first):
   [INFO 0/100] EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
 ```
 
-PYUSD (live permanent delegate) and BNDRG (active WNS transfer hook) carry CEX listing blockers; sUSD (interest-bearing), BERN (transfer fee), and USDC (classic SPL) do not. Two of five carry a blocker, surfaced in one call.
+PYUSD (live permanent delegate) and BNDRG (active WNS transfer hook) carry CEX listing blockers; sUSD (interest-bearing), BERN (transfer fee), and USDC (classic SPL) do not. Two of five carry a blocker, surfaced in one call. Batch triage is the fast first pass (one getMultipleAccounts, no per-mint second hop); a single inspect on a flagged mint adds the second-hop hook-program analysis, which raises BNDRG from HIGH 60/100 to HIGH 95/100 once its upgradeable WNS hook is followed (see section 7).
 
 ## 3. A classic SPL Token mint: USDC
 
@@ -269,9 +269,17 @@ Integration findings (8):
 
 Posture:
   CEX listing blockers:  transfer-hook, transfer-hook-program
+
+Remediation path (renounce a live authority to lower risk):
+  current: HIGH (risk score 95/100)
+  renounce transfer-hook -> HIGH (75/100)
+  renounce freeze-authority -> HIGH (80/100)
+  renounce mint-authority -> HIGH (90/100)
+  renounce mint-close-authority -> HIGH (90/100)
+  renounce all of the above -> HIGH (50/100)
 ```
 
-(Findings below MEDIUM trimmed to their headline for space.) The first finding is what any tool flags: a hook is set. The second is the second hop: the hook **program** is upgradeable, so a clean audit of today's bytecode is void the moment its upgrade authority swaps it. That is why an upgradeable hook is a CEX listing blocker, and it is exactly what a mint decode alone is blind to.
+(Findings below MEDIUM trimmed to their headline for space.) The first finding is what any tool flags: a hook is set. The second is the second hop: the hook **program** is upgradeable, so a clean audit of today's bytecode is void the moment its upgrade authority swaps it. The remediation path drives it home: even renouncing every authority the issuer controls, the mint stays HIGH (50/100), because the upgrade authority that can swap the hook bytecode is not the issuer's to renounce. That residual is exactly what a mint decode alone is blind to.
 
 ## Regenerating this demo
 

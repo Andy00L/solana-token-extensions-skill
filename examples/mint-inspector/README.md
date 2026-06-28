@@ -83,6 +83,8 @@ Per address (worst first):
   [INFO 0/100]       EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (mint; no CEX blockers)
 ```
 
+Batch triage is a fast first pass (one `getMultipleAccounts`, no per-mint second hop). Run a single inspect on a flagged mint for the second-hop hook-program analysis: it follows BNDRG's active WNS hook and raises it from HIGH 60/100 to HIGH 95/100 once the upgradeable program is read.
+
 ## MCP server
 
 The same core is exposed over MCP as five read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict via `structuredContent`), so an agent can work without writing code.

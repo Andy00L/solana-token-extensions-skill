@@ -37,6 +37,12 @@ describe("second-hop hook-program enrichment", () => {
     expect(finding?.severity).toBe("high");
     expect(finding?.detail).toContain(WNS_HOOK_PROGRAM.upgradeAuthority);
     expect(enriched.assessment.posture.cexBlockers).toContain("transfer-hook-program");
+    // The remediation projection must agree with the enriched headline: the
+    // upgradeable-hook finding is not a renounceable mint authority, so it persists in
+    // every projection and the current verdict matches the posture (regression guard:
+    // the headline once read 95 while the remediation baseline read 60).
+    expect(enriched.remediation.currentScore).toBe(enriched.assessment.posture.score);
+    expect(enriched.remediation.currentSeverity).toBe(enriched.assessment.posture.overallSeverity);
   });
 
   it("leaves a hook with no program set unchanged and does not fetch", async () => {

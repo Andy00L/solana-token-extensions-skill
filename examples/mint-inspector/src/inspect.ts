@@ -7,6 +7,7 @@ import {
   type AccountAssessment,
   type AssessedExtension,
   type Assessment,
+  type Finding,
   type MintAuthorityLiveness,
   type Remediation,
   type Severity,
@@ -51,16 +52,7 @@ export function inspectAccount(address: PublicKey, accountInfo: AccountInfo<Buff
     return { status: "ok", inspection: { kind: "token-account", account, assessment } };
   }
   const mint = decoded.entity.mint;
-  const assessedExtensions = mint.extensions.map(toAssessedExtension);
-  // The base mint and freeze authorities are assessed only for Token-2022 mints;
-  // a classic SPL mint is reported as having no Token-2022 extensions.
-  const mintAuthorities: MintAuthorityLiveness | undefined =
-    mint.programKind === "token-2022"
-      ? {
-          mintAuthorityLive: isLiveAuthorityKey(mint.mintAuthority),
-          freezeAuthorityLive: isLiveAuthorityKey(mint.freezeAuthority),
-        }
-      : undefined;
+  const { assessedExtensions, mintAuthorities } = mintAssessmentInputs(mint);
   const assessment = assessExtensions(assessedExtensions, mintAuthorities);
   const remediation = projectRenouncements(assessedExtensions, mintAuthorities);
   return { status: "ok", inspection: { kind: "mint", mint, assessment, remediation } };
@@ -76,6 +68,44 @@ export type RawAccountFetcher = (
 // The ProgramData header: u32 tag + u64 slot + Option<Pubkey> = 45 bytes. Fetching
 // only this avoids pulling the hook program's full bytecode. Source: hook-program.ts.
 const PROGRAM_DATA_HEADER_SLICE = { offset: 0, length: 45 } as const;
+
+/**
+ * Derive the risk-engine inputs for a decoded mint: the per-extension assessment
+ * inputs and, for a Token-2022 mint, the base mint and freeze authority liveness.
+ * Shared by the initial inspection and the second-hop enrichment so both compute the
+ * assessment and the remediation projection from the same inputs.
+ */
+function mintAssessmentInputs(mint: DecodedMint): {
+  assessedExtensions: AssessedExtension[];
+  mintAuthorities: MintAuthorityLiveness | undefined;
+} {
+  const assessedExtensions = mint.extensions.map(toAssessedExtension);
+  // The base mint and freeze authorities are assessed only for Token-2022 mints;
+  // a classic SPL mint is reported as having no Token-2022 extensions.
+  const mintAuthorities: MintAuthorityLiveness | undefined =
+    mint.programKind === "token-2022"
+      ? {
+          mintAuthorityLive: isLiveAuthorityKey(mint.mintAuthority),
+          freezeAuthorityLive: isLiveAuthorityKey(mint.freezeAuthority),
+        }
+      : undefined;
+  return { assessedExtensions, mintAuthorities };
+}
+
+/**
+ * Fold a single second-hop finding into a mint inspection: add it to the posture and
+ * recompute the remediation with the finding marked persistent (it is not a
+ * renounceable mint authority), so the headline verdict and the remediation's current
+ * and floor stay consistent.
+ */
+function foldHookProgramFinding(inspection: Extract<Inspection, { kind: "mint" }>, finding: Finding): Inspection {
+  const { assessedExtensions, mintAuthorities } = mintAssessmentInputs(inspection.mint);
+  return {
+    ...inspection,
+    assessment: withAdditionalFindings(inspection.assessment, [finding]),
+    remediation: projectRenouncements(assessedExtensions, mintAuthorities, [finding]),
+  };
+}
 
 /**
  * Second-hop enrichment: when a mint carries an ACTIVE transfer hook (a program is
@@ -101,13 +131,13 @@ export async function enrichInspectionWithHookProgram(
   const programAccount = await fetchAccount(hookProgramId);
   if (programAccount === null) {
     const finding = buildHookProgramFinding({ kind: "undecodable", reason: `could not read hook program ${hookProgramId}` });
-    return { ...inspection, assessment: withAdditionalFindings(inspection.assessment, [finding]) };
+    return foldHookProgramFinding(inspection, finding);
   }
   const programDataAddress = decodeProgramDataAddress(programAccount);
   const programDataAccount =
     programDataAddress === null ? null : await fetchAccount(programDataAddress, PROGRAM_DATA_HEADER_SLICE);
   const finding = buildHookProgramFinding(assessHookProgram(programAccount, programDataAccount));
-  return { ...inspection, assessment: withAdditionalFindings(inspection.assessment, [finding]) };
+  return foldHookProgramFinding(inspection, finding);
 }
 
 /** The headline verdict (severity and 0-to-100 score) of any inspection. */
