@@ -33,6 +33,17 @@ npm run inspect -- --hook-codegen <MINT> --hook <PROGRAM> [--decimals <N>]   # t
 
 The default RPC is Solana mainnet-beta. Pass `--rpc` for another cluster or a private endpoint. One address prints the full report; more than one prints a batch summary (worst verdict, counts by severity, how many carry a CEX blocker) with a per-address line. Exit code is 0 on success, 1 on an inspection error (bad address, RPC failure, account not found, not a mint), 2 on a usage error.
 
+## Scored evals
+
+A runnable, scored eval suite turns the executable rows of EVALS.md into checks against the real risk engine:
+
+```bash
+cd examples/mint-inspector
+npm run evals      # prints a PASS/FAIL table and an accuracy, exits non-zero on any failure
+```
+
+`evals.json` holds 16 cases (planned extension sets with authority liveness, and captured mainnet mints) checked for severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, and the remediation path. A vitest gate runs the same suite under `make verify`, so a verdict regression fails the build. Latest run: 16 of 16 (100%).
+
 ## MCP server
 
 The same logic is exposed over MCP as five read-only tools (each with declared read-only annotations and a structured, agent-consumable verdict), so an agent in the kit can work without writing code.

@@ -200,3 +200,43 @@ Token-2022 mint scaffold: REJECTED
     - Scaled UI Amount with Interest-Bearing is rejected at init
   No code is generated for an illegal set.
 ```
+
+## 6. Scored eval suite (npm run evals)
+
+The executable rows of [EVALS.md](../../EVALS.md) run as a scored suite against the real risk engine, so correctness is a reproducible number, not a claim. It runs under `make verify` and as a standalone command:
+
+```
+$ npm run evals
+
+Mint inspector eval suite (offline, deterministic)
+
+  [PASS] scaled-ui-with-interest-bearing-rejected (EVALS #4)
+  [PASS] confidential-with-hook-coexist (EVALS #5)
+  [PASS] non-transferable-with-fee-pointless (EVALS #10)
+  [PASS] vet-fee-delegate-pausable (EVALS #11)
+  [PASS] permanent-delegate-renounced-low (EVALS #14)
+  [PASS] permanent-delegate-live-critical-remediation (EVALS #17)
+  [PASS] honeypot-fee-renounced-critical (EVALS #19)
+  [PASS] normal-fee-renounced-low (EVALS #19)
+  [PASS] scheduled-fee-jump-critical (EVALS #19)
+  [PASS] pyusd-full-decode-code-16 (EVALS #13)
+  [PASS] pyusd-latent-hook-and-remediation-floor (EVALS #15)
+  [PASS] bndrg-active-hook-blocks (EVALS #15)
+  [PASS] usdc-classic-spl-clean
+  [PASS] bern-transfer-fee-decode
+  [PASS] susd-interest-bearing-decode
+  [PASS] confidential-mint-burn-requires-confidential-transfer
+
+Accuracy: 16/16 cases passed (100%)
+```
+
+Each case feeds a planned extension set (with authority liveness) or a captured mainnet mint through the engine and checks the verdict: severity, the 0-to-100 score, CEX blockers, conflicts, decoded extensions, or the remediation path.
+
+## Regenerating this demo
+
+The CLI session shown above is scripted in [`demo.tape`](demo.tape) so the recording is reproducible. Regenerate `demo.gif` with [vhs](https://github.com/charmbracelet/vhs):
+
+```bash
+cd examples/mint-inspector
+vhs demo.tape    # writes demo.gif
+```

@@ -8,6 +8,7 @@
   "scripts": {
     "inspect": "tsx src/cli.ts",
     "mcp": "tsx src/mcp-server.ts",
+    "evals": "tsx src/evals-cli.ts",
     "test": "tsc --noEmit && node run-tests.mjs",
     "test:once": "vitest run",
     "typecheck": "tsc --noEmit"

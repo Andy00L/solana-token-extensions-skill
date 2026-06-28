@@ -3,12 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveActiveFee } from "../src/decode-mint";
 import { inspectAccount, inspectionSummary, isLiveAuthorityKey } from "../src/inspect";
 import { type MultiAccountFetcher, batchSummary, handleInspectMany } from "../src/inspect-many";
-import {
-  REAL_MINT_FIXTURES,
-  type RealMintFixture,
-  fixtureAccountInfo,
-  fixtureAddress,
-} from "./real-mint-fixtures";
+import { REAL_MINT_FIXTURES, fixtureAccountInfo, fixtureAddress, fixtureByName } from "../src/mainnet-fixtures";
 
 // A fetcher backed by the captured mainnet fixtures, so a batch can be triaged
 // fully offline against real on-chain data.
@@ -22,16 +17,11 @@ function realFixtureFetcher(): MultiAccountFetcher {
     }));
 }
 
-function fixtureByName(name: string): RealMintFixture {
-  const found = REAL_MINT_FIXTURES.find((fixture) => fixture.name === name);
-  if (found === undefined) {
-    throw new Error(`fixture not found: ${name}`);
-  }
-  return found;
-}
-
 function inspectFixture(name: string) {
   const fixture = fixtureByName(name);
+  if (fixture === null) {
+    throw new Error(`fixture not found: ${name}`);
+  }
   return inspectAccount(fixtureAddress(fixture), fixtureAccountInfo(fixture));
 }
 

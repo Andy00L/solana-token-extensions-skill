@@ -105,7 +105,15 @@ Register them by pointing an MCP client at that command.
 npm test           # tsc --noEmit, then the suite (one file per process, retries only on a LiteSVM native crash)
 ```
 
-**81 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+**84 tests, offline and deterministic** (plus a CI-gated live mainnet smoke test). The risk engine, the value-aware transfer-fee logic, the renounce-to-remediate projection, the batch triage, the compatibility checker, the build-time scaffold generator, and the transfer-hook integration codegen are tested as pure functions, including the conditional-severity model (a renounced permanent delegate downgrades to low and clears the CEX block; a no-program hook is medium, an active hook is high), the magnitude escalation (a near-100% fee is critical even when the authority is renounced), and the three-state authority decode (None vs the zero/System key vs a live key); the decoder is tested against Token-2022 mints built in LiteSVM, against five captured mainnet mints (PYUSD, USDC, BERN, sUSD, and a WNS hooked NFT) decoded from committed account bytes, and against a built token account (withheld fees, immutable owner); the MCP handlers are tested with an injected fetcher, including a five-mint batch triaged against the captured mainnet data. The only IO in the tool is a single `getAccountInfo` call, isolated in `src/fetch-account.ts` and injected in tests.
+
+### Scored eval suite
+
+```bash
+npm run evals      # run evals.json through the engine; prints a PASS/FAIL table and an accuracy
+```
+
+`evals.json` turns the executable rows of [EVALS.md](../../EVALS.md) into 16 scored cases: each feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the produced verdict (severity, 0-to-100 score, CEX blockers, conflicts, decoded extensions, or remediation path). A vitest gate (`tests/evals.test.ts`) runs the same suite under `make verify` and fails the build if any verdict regresses. Latest run: 16 of 16 cases pass (100%).
 
 ## Dependency advisories
 
@@ -132,5 +140,9 @@ src/
   cli.ts                 CLI entry (one address, or several for a batch triage)
   mcp-tool.ts            transport-free inspect_mint handler (testable with an injected fetcher)
   mcp-server.ts          thin MCP stdio server exposing the five tools
-tests/                   pure risk, compatibility, and scaffold tests, LiteSVM decode tests, captured-mint decodes, MCP handler tests, a gated live-RPC smoke test
+  mainnet-fixtures.ts    captured mainnet mint accounts (PYUSD, USDC, BERN, sUSD, BNDRG) for offline decode and evals
+  evals.ts               scored eval suite engine (schema, runner, accuracy)
+  evals-cli.ts           npm run evals entry: load evals.json, run, print table + accuracy
+tests/                   pure risk, compatibility, and scaffold tests, LiteSVM decode tests, captured-mint decodes, MCP handler tests, the scored eval gate, a gated live-RPC smoke test
+evals.json               scored eval cases (run with npm run evals)
 ```

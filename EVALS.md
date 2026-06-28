@@ -1,6 +1,6 @@
 # Evals: expected behavior on representative prompts
 
-A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 81 offline tests in `examples/mint-inspector`.
+A self-check of what the skill should route to and what it must assert. Each case is a prompt, the file the router should land on, and the load-bearing facts the answer must contain. Run them by hand against the installed skill. The executable parts (the mint inspector, the value-aware fee engine, the batch triage, the remediation projection, the compatibility checker, and the mint-scaffold generator) are covered by the 84 offline tests in `examples/mint-inspector`. The rows that resolve to a concrete inspector verdict are also a runnable, scored suite: `examples/mint-inspector/evals.json`, run with `npm run evals` (16 cases through the real risk engine, 100% pass).
 
 | # | Prompt | Routes to | Must assert |
 |---|--------|-----------|-------------|
@@ -25,3 +25,7 @@ A self-check of what the skill should route to and what it must assert. Each cas
 | 19 | "This mint has a 100% transfer fee but the fee authority is renounced. Safe?" | mint-inspector.md | No: a near-100% fee is a sell-blocking honeypot and scores critical even when the authority is renounced (the rate is locked high), so it is a CEX blocker |
 
 These cases encode the corrections this skill makes over a flat reference: the confidential-transfer status (re-enabled on mainnet 2026-06-04) (3), the runtime-enforced exclusion (4), the corrected coexistence (5), the complete decode (13), conditional severity on authority liveness (14, 15), value-aware fee magnitude (19), batch listing-set triage (16), the renounce-to-remediate path (17), the build-time scaffold generator (18), and the executable tools (6, 11).
+
+## Runnable scored subset
+
+The rows above that resolve to a concrete inspector verdict are executed by `examples/mint-inspector/evals.json` and scored on every `make verify` (a vitest gate fails the build if any verdict regresses; run them directly with `npm run evals`). The suite maps rows 4, 5, 10, 11, 13, 14, 15, 17, and 19 to executable checks, and adds the contrast cases the table implies but does not spell out: a honeypot fee versus a small renounced fee, a scheduled fee jump, an active hook (BNDRG) versus PYUSD's latent one, a clean classic mint (USDC), and a confidential-mint-burn combination rejected at init. Each case feeds a planned extension set (with authority liveness) or a captured mainnet mint through the same risk engine the MCP tools call, then checks the severity, score, CEX blockers, conflicts, decoded extensions, or remediation path. Latest run: 16 of 16 cases pass (100%).

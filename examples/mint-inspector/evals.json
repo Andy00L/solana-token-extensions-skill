@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "description": "Scored eval suite for the Token-2022 mint inspector. Each case runs a concrete input (a planned extension set with authority liveness, or a captured mainnet mint decoded from real bytes) through the same risk engine the inspector and MCP tools use, and checks the produced verdict. Operationalizes the executable rows of EVALS.md. Run with: npm run evals.",
+  "cases": [
+    {
+      "id": "scaled-ui-with-interest-bearing-rejected",
+      "evalsRef": 4,
+      "prompt": "Combine Scaled UI Amount with Interest-Bearing",
+      "rationale": "Both rewrite the displayed amount, so Token-2022 rejects the pair at init with InvalidExtensionCombination.",
+      "input": { "kind": "set", "extensions": [{ "id": "scaled-ui-amount" }, { "id": "interest-bearing" }] },
+      "expect": {
+        "severity": "high",
+        "score": 45,
+        "conflictInitRejected": true,
+        "conflictTitleContains": "rejected at init"
+      }
+    },
+    {
+      "id": "confidential-with-hook-coexist",
+      "evalsRef": 5,
+      "prompt": "Is Confidential Transfer compatible with a Transfer Hook?",
+      "rationale": "They coexist (PYUSD carries both); the hook receives u64::MAX on a confidential transfer. A low caveat, not an init error.",
+      "input": { "kind": "set", "extensions": [{ "id": "confidential-transfer" }, { "id": "transfer-hook" }] },
+      "expect": {
+        "conflictInitRejected": false,
+        "conflictTitleContains": "no real amount"
+      }
+    },
+    {
+      "id": "non-transferable-with-fee-pointless",
+      "evalsRef": 10,
+      "prompt": "Soulbound token that also charges a transfer fee",
+      "rationale": "A non-transferable token never transfers, so a transfer fee can never apply. A configuration smell the runtime still allows, not an init error.",
+      "input": { "kind": "set", "extensions": [{ "id": "non-transferable" }, { "id": "transfer-fee" }] },
+      "expect": {
+        "severity": "medium",
+        "score": 45,
+        "conflictInitRejected": false,
+        "conflictTitleContains": "pointless"
+      }
+    },
+    {
+      "id": "vet-fee-delegate-pausable",
+      "evalsRef": 11,
+      "prompt": "Vet this planned set: transfer-fee, permanent-delegate, pausable",
+      "rationale": "A live permanent delegate and a live pause authority both block a CEX listing; a normal transfer fee is routing friction, not a blocker.",
+      "input": {
+        "kind": "set",
+        "extensions": [{ "id": "transfer-fee" }, { "id": "permanent-delegate" }, { "id": "pausable" }]
+      },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "cexBlockersInclude": ["permanent-delegate", "pausable"],
+        "cexBlockersExclude": ["transfer-fee"]
+      }
+    },
+    {
+      "id": "permanent-delegate-renounced-low",
+      "evalsRef": 14,
+      "prompt": "This mint has a permanent delegate but the delegate is null. Still critical?",
+      "rationale": "Conditional severity: a renounced (null) permanent delegate is dormant, so it drops to low and clears the CEX block.",
+      "input": {
+        "kind": "set",
+        "extensions": [{ "id": "permanent-delegate", "authorityRenounced": true }]
+      },
+      "expect": {
+        "severity": "low",
+        "score": 5,
+        "cexBlockersExclude": ["permanent-delegate"],
+        "cexListable": true
+      }
+    },
+    {
+      "id": "permanent-delegate-live-critical-remediation",
+      "evalsRef": 17,
+      "prompt": "This mint is CRITICAL from a live permanent delegate. What would lower the risk?",
+      "rationale": "A live permanent delegate is critical and the only hard CEX blocker; renouncing it drops the verdict to low and makes the mint listable.",
+      "input": {
+        "kind": "set",
+        "extensions": [{ "id": "permanent-delegate", "authorityRenounced": false }]
+      },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "cexBlockersInclude": ["permanent-delegate"],
+        "cexListable": false,
+        "remediation": {
+          "currentSeverity": "critical",
+          "step": { "target": "permanent-delegate", "afterSeverity": "low" },
+          "floorSeverity": "low"
+        }
+      }
+    },
+    {
+      "id": "honeypot-fee-renounced-critical",
+      "evalsRef": 19,
+      "prompt": "This mint has a 100% transfer fee but the fee authority is renounced. Safe?",
+      "rationale": "Value-aware severity: a near-100% fee is a sell-blocking honeypot and stays critical even when the rate is locked by a renounced authority.",
+      "input": {
+        "kind": "set",
+        "extensions": [
+          { "id": "transfer-fee", "authorityRenounced": true, "transferFee": { "activeBasisPoints": 10000, "scheduledBasisPoints": null } }
+        ]
+      },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "cexBlockersInclude": ["transfer-fee"],
+        "cexListable": false
+      }
+    },
+    {
+      "id": "normal-fee-renounced-low",
+      "evalsRef": 19,
+      "prompt": "This mint has a 1% transfer fee and the fee authority is renounced. Safe to list?",
+      "rationale": "Contrast to the honeypot: a small renounced fee is locked-low, routing friction at most, and does not block a listing.",
+      "input": {
+        "kind": "set",
+        "extensions": [
+          { "id": "transfer-fee", "authorityRenounced": true, "transferFee": { "activeBasisPoints": 100, "scheduledBasisPoints": null } }
+        ]
+      },
+      "expect": {
+        "severity": "low",
+        "score": 5,
+        "cexListable": true,
+        "cexBlockersExclude": ["transfer-fee"]
+      }
+    },
+    {
+      "id": "scheduled-fee-jump-critical",
+      "evalsRef": 19,
+      "prompt": "The fee is 1% now but a 95% fee is scheduled for a future epoch. Risk?",
+      "rationale": "The two-epoch rule surfaces a scheduled jump; the higher of the current and scheduled rate drives the risk, so a pending 95% fee is already critical.",
+      "input": {
+        "kind": "set",
+        "extensions": [
+          { "id": "transfer-fee", "authorityRenounced": false, "transferFee": { "activeBasisPoints": 100, "scheduledBasisPoints": 9500 } }
+        ]
+      },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "cexBlockersInclude": ["transfer-fee"]
+      }
+    },
+    {
+      "id": "pyusd-full-decode-code-16",
+      "evalsRef": 13,
+      "prompt": "What does the confidential transfer fee extension (code 16) on PYUSD mean, and what extensions does PYUSD carry?",
+      "rationale": "PYUSD carries code 16 (confidential-transfer-fee), which the published JS enum does not name; the inspector decodes it instead of falling through to unrecognized.",
+      "input": { "kind": "fixture", "fixture": "PYUSD" },
+      "expect": {
+        "severity": "critical",
+        "score": 100,
+        "decodedExtensionsInclude": ["confidential-transfer-fee"],
+        "noUnrecognized": true,
+        "cexBlockersInclude": ["permanent-delegate"],
+        "cexBlockersExclude": ["confidential-transfer", "transfer-hook"]
+      }
+    },
+    {
+      "id": "pyusd-latent-hook-and-remediation-floor",
+      "evalsRef": 15,
+      "prompt": "Is PYUSD's transfer hook a listing blocker, and how far can renouncing authorities lower the risk?",
+      "rationale": "PYUSD's hook extension has no program set, so it is a latent caveat, not a hard blocker; renouncing the permanent delegate clears the critical but floors at medium because confidential transfer and the latent hook have no renounce path.",
+      "input": { "kind": "fixture", "fixture": "PYUSD" },
+      "expect": {
+        "extensionDetail": { "extension": "transfer-hook", "key": "programId", "equals": "none" },
+        "cexBlockersExclude": ["transfer-hook"],
+        "remediation": {
+          "currentSeverity": "critical",
+          "step": { "target": "permanent-delegate", "afterSeverity": "medium" },
+          "floorSeverity": "medium"
+        }
+      }
+    },
+    {
+      "id": "bndrg-active-hook-blocks",
+      "evalsRef": 15,
+      "prompt": "This NFT mint has a transfer hook with a program set. Is it a listing blocker?",
+      "rationale": "Contrast to PYUSD's null hook: BNDRG carries an active WNS hook program, which is a high finding and a hard CEX blocker.",
+      "input": { "kind": "fixture", "fixture": "BNDRG" },
+      "expect": {
+        "extensionDetail": { "extension": "transfer-hook", "key": "programId", "equals": "wns1gDLt8fgLcGhWi5MqAqgXpwEP1JftKE9eZnXS1HM" },
+        "cexBlockersInclude": ["transfer-hook"]
+      }
+    },
+    {
+      "id": "usdc-classic-spl-clean",
+      "prompt": "Inspect USDC. Is it a Token-2022 mint with risky extensions?",
+      "rationale": "USDC is a classic SPL Token mint with no Token-2022 extensions, so it carries no extension findings and nothing blocks a listing.",
+      "input": { "kind": "fixture", "fixture": "USDC" },
+      "expect": {
+        "severity": "info",
+        "score": 0,
+        "cexListable": true,
+        "decodedExtensionsEqual": []
+      }
+    },
+    {
+      "id": "bern-transfer-fee-decode",
+      "prompt": "What transfer fee does BERN charge, and does it block a listing?",
+      "rationale": "BERN charges 269 bps (2.69%); a sub-threshold fee is routing friction, not a CEX blocker, whatever the authority model.",
+      "input": { "kind": "fixture", "fixture": "BERN" },
+      "expect": {
+        "extensionDetail": { "extension": "transfer-fee", "key": "basisPoints", "equals": "269" },
+        "cexBlockersExclude": ["transfer-fee"]
+      }
+    },
+    {
+      "id": "susd-interest-bearing-decode",
+      "prompt": "What is sUSD's interest-bearing rate?",
+      "rationale": "sUSD carries an interest-bearing rate of 2623 bps and on-chain metadata; the inspector decodes both.",
+      "input": { "kind": "fixture", "fixture": "sUSD" },
+      "expect": {
+        "extensionDetail": { "extension": "interest-bearing", "key": "currentRateBps", "equals": "2623" },
+        "decodedExtensionsInclude": ["interest-bearing", "token-metadata"]
+      }
+    },
+    {
+      "id": "confidential-mint-burn-requires-confidential-transfer",
+      "prompt": "Add Confidential Mint and Burn to a mint without Confidential Transfer",
+      "rationale": "Confidential mint and burn operate on confidential balances, so Token-2022 rejects the mint at init unless Confidential Transfer is also present (InvalidExtensionCombination).",
+      "input": { "kind": "set", "extensions": [{ "id": "confidential-mint-burn" }] },
+      "expect": {
+        "severity": "high",
+        "score": 35,
+        "conflictInitRejected": true,
+        "conflictTitleContains": "requires confidential transfer"
+      }
+    }
+  ]
+}

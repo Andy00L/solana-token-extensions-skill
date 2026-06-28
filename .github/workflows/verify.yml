@@ -33,6 +33,10 @@ jobs:
         working-directory: examples/mint-inspector
         run: npm ci && npm test
 
+      - name: Mint inspector (scored eval suite)
+        working-directory: examples/mint-inspector
+        run: npm run evals
+
       - name: Mint inspector (live mainnet smoke, best-effort)
         working-directory: examples/mint-inspector
         run: npx vitest run tests/live-smoke.test.ts

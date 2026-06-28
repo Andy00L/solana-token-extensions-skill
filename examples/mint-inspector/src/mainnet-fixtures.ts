@@ -1,9 +1,11 @@
 /**
  * Real Solana mainnet-beta mint accounts, captured once on 2026-06-22 via
  * getAccountInfo (base64 encoding) from https://api.mainnet-beta.solana.com.
- * This is public on-chain data, embedded so the decoder is proven against real,
- * widely known mints fully offline and deterministically (the test does no IO).
- * To refresh, re-run getAccountInfo for each address and replace dataBase64.
+ * Public on-chain data, embedded so the decoder and the scored eval runner are
+ * proven against real, widely known mints fully offline and deterministically
+ * (no IO). Consumed by the test suite (tests/real-mint-decode.test.ts) and the
+ * eval runner (src/evals.ts, the npm run evals tool). To refresh, re-run
+ * getAccountInfo for each address and replace dataBase64.
  */
 import { type AccountInfo, PublicKey } from "@solana/web3.js";
 
@@ -66,4 +68,9 @@ export function fixtureAccountInfo(fixture: RealMintFixture): AccountInfo<Buffer
 /** The mint address of a captured fixture as a PublicKey. */
 export function fixtureAddress(fixture: RealMintFixture): PublicKey {
   return new PublicKey(fixture.address);
+}
+
+/** Look up a captured fixture by name, or null when none matches. */
+export function fixtureByName(name: string): RealMintFixture | null {
+  return REAL_MINT_FIXTURES.find((fixture) => fixture.name === name) ?? null;
 }
