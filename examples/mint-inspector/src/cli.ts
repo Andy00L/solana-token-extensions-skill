@@ -16,6 +16,7 @@ import { type FetchError, fetchCurrentEpoch, fetchMintAccount, formatFetchError 
 import { formatDecodeError, formatReport, inspectAccount } from "./inspect";
 import { formatBatchInputError, formatBatchReport, handleInspectMany } from "./inspect-many";
 import { formatGenerateReport, generateMintScaffold } from "./generate-mint";
+import { formatHookCodegen, generateHookTransferCodegen } from "./hook-codegen";
 
 // Solana public mainnet RPC. Source: https://solana.com/docs/core/clusters
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
@@ -28,7 +29,9 @@ const USAGE = [
   `  --rpc <URL>      RPC endpoint (default: ${DEFAULT_RPC_URL})`,
   "  --scaffold <IDS> generate a Token-2022 mint scaffold for a comma-separated",
   "                   extension-id set instead of inspecting (offline)",
-  "  --decimals <N>   mint decimals for --scaffold (default 9)",
+  "  --hook-codegen <MINT> --hook <PROGRAM>",
+  "                   generate a transfer-hook transfer client for a hooked mint (offline)",
+  "  --decimals <N>   mint decimals for --scaffold or --hook-codegen (default 9)",
   "  --json           print the output as JSON instead of text",
   "  -h, --help       show this help",
 ].join("\n");
@@ -37,14 +40,17 @@ type ParsedArgs =
   | { status: "help" }
   | { status: "error"; message: string }
   | { status: "ok"; addresses: string[]; rpcUrl: string; json: boolean }
-  | { status: "scaffold"; extensions: string[]; decimals: number; json: boolean };
+  | { status: "scaffold"; extensions: string[]; decimals: number; json: boolean }
+  | { status: "hook-codegen"; mint: string; hookProgramId: string; decimals: number; json: boolean };
 
 function parseArgs(argv: string[]): ParsedArgs {
   const addresses: string[] = [];
   let rpcUrl = DEFAULT_RPC_URL;
   let json = false;
   let scaffold: string | null = null;
-  let decimals = 9; // default mint decimals for --scaffold; SPL convention
+  let hookCodegenMint: string | null = null;
+  let hookProgramId: string | null = null;
+  let decimals = 9; // default mint decimals for --scaffold and --hook-codegen; SPL convention
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -73,6 +79,24 @@ function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       continue;
     }
+    if (argument === "--hook-codegen") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return { status: "error", message: "--hook-codegen requires a mint address" };
+      }
+      hookCodegenMint = value;
+      index += 1;
+      continue;
+    }
+    if (argument === "--hook") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return { status: "error", message: "--hook requires a hook program id" };
+      }
+      hookProgramId = value;
+      index += 1;
+      continue;
+    }
     if (argument === "--decimals") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
@@ -90,6 +114,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       return { status: "error", message: `unknown flag: ${argument}` };
     }
     addresses.push(argument);
+  }
+
+  if (hookCodegenMint !== null) {
+    if (hookProgramId === null) {
+      return { status: "error", message: "--hook-codegen requires --hook <PROGRAM>" };
+    }
+    return { status: "hook-codegen", mint: hookCodegenMint, hookProgramId, decimals, json };
   }
 
   if (scaffold !== null) {
@@ -129,6 +160,21 @@ async function runCli(argv: string[]): Promise<number> {
   if (parsed.status === "error") {
     process.stderr.write(`[InspectMintCli] ${parsed.message}\n${USAGE}\n`);
     return 2;
+  }
+
+  // Offline transfer-hook codegen: emit a correct transfer client for a hooked mint.
+  if (parsed.status === "hook-codegen") {
+    const result = generateHookTransferCodegen({
+      mint: parsed.mint,
+      hookProgramId: parsed.hookProgramId,
+      decimals: parsed.decimals,
+    });
+    if (parsed.json) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${formatHookCodegen(result)}\n`);
+    }
+    return 0;
   }
 
   // Offline scaffold generation: vet an extension set and emit mint creation code.
